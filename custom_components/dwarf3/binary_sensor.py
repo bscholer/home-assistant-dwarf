@@ -14,8 +14,10 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator
+from .const import CONF_MODE, MODE_DIRECT, MODE_RELAY
+from .coordinator import Dwarf3ConfigEntry
 from .entity import Dwarf3Entity
 
 
@@ -55,13 +57,20 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: Dwarf3ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
-    async_add_entities(Dwarf3Binary(coordinator, description) for description in BINARY_SENSORS)
+    direct = entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT
+    async_add_entities(
+        Dwarf3Binary(coordinator, description)
+        for description in BINARY_SENSORS
+        if not direct or description.key == "scope_reachable"
+    )
 
 
 class Dwarf3Binary(Dwarf3Entity, BinarySensorEntity):
     entity_description: Dwarf3BinaryDescription
 
-    def __init__(self, coordinator: Dwarf3Coordinator, description: Dwarf3BinaryDescription) -> None:
+    def __init__(
+        self, coordinator: DataUpdateCoordinator[dict[str, Any]], description: Dwarf3BinaryDescription
+    ) -> None:
         super().__init__(coordinator, description.key)
         self.entity_description = description
 

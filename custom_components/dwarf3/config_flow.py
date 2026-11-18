@@ -13,15 +13,20 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import RelayClient, RelayError, RelayUnauthorized, RelayUnreachable
 from .const import (
+    CONF_MODE,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
+    DIRECT_DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     MIN_SCAN_INTERVAL,
+    MODE_DIRECT,
+    MODE_RELAY,
     SUPPORTED_SPEC_MAJOR,
 )
 from .coordinator import Dwarf3ConfigEntry
+from .direct import ScopeDirectClient, ScopeUnreachable
 
 
 class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -46,6 +51,30 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
         return None
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(step_id="user", menu_options=[MODE_RELAY, MODE_DIRECT])
+
+    async def async_step_direct(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Read-only, straight from the scope. It never touches the scope's one control connection."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            host = user_input[CONF_HOST].strip()
+            await self.async_set_unique_id(f"direct:{host}")
+            self._abort_if_unique_id_configured()
+            try:
+                info = await ScopeDirectClient(async_get_clientsession(self.hass), host).device_info()
+            except ScopeUnreachable:
+                errors["base"] = "cannot_connect"
+            else:
+                if "sdCardInfo" not in info:
+                    errors["base"] = "not_a_scope"
+                else:
+                    return self.async_create_entry(
+                        title=f"DWARF 3 ({host}, read-only)", data={CONF_HOST: host, CONF_MODE: MODE_DIRECT}
+                    )
+        schema = vol.Schema({vol.Required(CONF_HOST, default=(user_input or {}).get(CONF_HOST, vol.UNDEFINED)): str})
+        return self.async_show_form(step_id="direct", data_schema=schema, errors=errors)
+
+    async def async_step_relay(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             host, port = user_input[CONF_HOST].strip(), user_input[CONF_PORT]
@@ -56,7 +85,8 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = error
             else:
                 return self.async_create_entry(
-                    title=f"DWARF 3 ({host})", data={CONF_HOST: host, CONF_PORT: port, CONF_TOKEN: token}
+                    title=f"DWARF 3 ({host})",
+                    data={CONF_HOST: host, CONF_PORT: port, CONF_TOKEN: token, CONF_MODE: MODE_RELAY},
                 )
         schema = vol.Schema(
             {
@@ -65,7 +95,7 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_TOKEN): str,
             }
         )
-        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="relay", data_schema=schema, errors=errors)
 
     async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
         return await self.async_step_reauth_confirm()
@@ -93,7 +123,12 @@ class Dwarf3OptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(data=user_input)
-        current = self.config_entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        default = (
+            DIRECT_DEFAULT_SCAN_INTERVAL
+            if self.config_entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT
+            else DEFAULT_SCAN_INTERVAL
+        )
+        current = self.config_entry.options.get(CONF_SCAN_INTERVAL, default)
         schema = vol.Schema(
             {vol.Required(CONF_SCAN_INTERVAL, default=current): vol.All(int, vol.Range(min=MIN_SCAN_INTERVAL))}
         )

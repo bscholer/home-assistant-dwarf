@@ -1,0 +1,72 @@
+"""Read-only access to the scope itself, without the relay.
+
+This never opens the control WebSocket, the scope's one control connection, so the DWARFLAB app keeps working.
+It reads only what the scope gives out over plain HTTP and FTP. The deviceInfo reply also holds the home Wi-Fi
+password in clear text, so nothing here keeps or logs more of it than the card figures.
+"""
+
+from __future__ import annotations
+
+import ftplib
+import re
+from typing import Any
+
+import aiohttp
+
+from .const import ALBUM_ROOT, SCOPE_API_PORT
+
+RAW_SESSION = re.compile(r"^DWARF_RAW_")
+STAMP = re.compile(r"(\d{4}-\d\d-\d\d-\d\d-\d\d-\d\d-\d+)$")
+
+
+def session_order(name: str) -> tuple[str, str]:
+    """Order sessions by the time in the folder name, oldest first."""
+    found = STAMP.search(name)
+    return (found.group(1) if found else "", name)
+
+
+class ScopeUnreachable(Exception):
+    """The scope did not answer on its HTTP API."""
+
+
+class ScopeDirectClient:
+    def __init__(self, session: aiohttp.ClientSession, host: str) -> None:
+        self._session = session
+        self.host = host
+
+    async def device_info(self) -> dict[str, Any]:
+        """Return the deviceInfo data. It holds secrets: callers pick fields and drop the rest."""
+        try:
+            async with self._session.post(
+                f"http://{self.host}:{SCOPE_API_PORT}/deviceInfo",
+                json={},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                body = await response.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError, ValueError) as err:
+            raise ScopeUnreachable(str(err) or type(err).__name__) from err
+        data = body.get("data") if isinstance(body, dict) else None
+        return data if isinstance(data, dict) else {}
+
+    async def sd_card(self) -> dict[str, Any]:
+        """Return the card figures in GB. Keys are missing when the scope does not say."""
+        card = (await self.device_info()).get("sdCardInfo") or {}
+        out: dict[str, Any] = {"has_sd_card": bool(card.get("hasSdcard"))}
+        if card.get("hasSdcard"):
+            for key, field in (("sd_free_gb", "availableSize"), ("sd_total_gb", "totalSize")):
+                if isinstance(card.get(field), (int, float)):
+                    out[key] = float(card[field])
+        return out
+
+    def list_sessions_blocking(self) -> list[str]:
+        """List capture sessions over anonymous FTP. Run it in an executor."""
+        ftp = ftplib.FTP(self.host, timeout=20)
+        try:
+            ftp.login()
+            names = [n.rsplit("/", 1)[-1] for n in ftp.nlst(ALBUM_ROOT)]
+        finally:
+            try:
+                ftp.quit()
+            except (ftplib.Error, OSError):
+                ftp.close()
+        return sorted((n for n in names if RAW_SESSION.match(n)), key=session_order)

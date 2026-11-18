@@ -1,7 +1,13 @@
 {
   "config": {
     "step": {
-      "user": {
+      "reauth_confirm": {
+        "title": "The relay refused the token",
+        "data": {
+          "token": "API token"
+        }
+      },
+      "relay": {
         "title": "Connect to the DWARF 3 relay",
         "description": "The relay runs on your network and holds the connection to the scope. Install the app, or run the relay image yourself.",
         "data": {
@@ -13,10 +19,19 @@
           "token": "Needed for control. Leave empty only if the relay runs with auth off."
         }
       },
-      "reauth_confirm": {
-        "title": "The relay refused the token",
+      "user": {
+        "title": "How do you want to connect?",
+        "description": "Read-only reads the scope directly and never takes its one control connection, so the DWARFLAB app keeps working. Full control goes through the relay, which also gives battery, temperatures, the camera, and controls.",
+        "menu_options": {
+          "direct": "Read-only, straight from the scope",
+          "relay": "Full control, through the relay"
+        }
+      },
+      "direct": {
+        "title": "Connect to the scope",
+        "description": "Gives the SD card and capture sessions. Battery, temperatures, the camera, and controls need the relay. Give the scope a fixed IP address in your router.",
         "data": {
-          "token": "API token"
+          "host": "Scope IP address"
         }
       }
     },
@@ -24,7 +39,8 @@
       "cannot_connect": "The relay did not answer. Check the host and port.",
       "invalid_auth": "The relay refused the token.",
       "unsupported_version": "This relay speaks a version of the API this integration does not support.",
-      "unknown": "The relay gave an unexpected answer."
+      "unknown": "The relay gave an unexpected answer.",
+      "not_a_scope": "That address answered, but it does not look like a DWARF 3."
     },
     "abort": {
       "already_configured": "This relay is already set up.",

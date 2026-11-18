@@ -9,7 +9,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_extract_config_entry_ids
 
 from .api import RelayError
-from .const import DOMAIN, EXPOSURES, FILTERS
+from .const import CONF_MODE, DOMAIN, EXPOSURES, FILTERS, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3Coordinator
 
 GOTO_SCHEMA = cv.make_entity_service_schema(
@@ -54,14 +54,12 @@ DELETE_SCHEMA = cv.make_entity_service_schema({vol.Required("session"): vol.Matc
 
 async def _coordinators(hass: HomeAssistant, call: ServiceCall) -> list[Dwarf3Coordinator]:
     ids = await async_extract_config_entry_ids(call)
-    found = [
-        entry.runtime_data
-        for entry in hass.config_entries.async_loaded_entries(DOMAIN)
-        if entry.entry_id in ids
-    ]
-    if not found:
+    entries = [e for e in hass.config_entries.async_loaded_entries(DOMAIN) if e.entry_id in ids]
+    if not entries:
         raise ServiceValidationError("Pick a DWARF 3 device or entity as the target.")
-    return found
+    if any(e.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT for e in entries):
+        raise ServiceValidationError("This DWARF 3 is set up in read-only mode. Controls need the relay.")
+    return [e.runtime_data for e in entries]
 
 
 def async_setup_services(hass: HomeAssistant) -> None:

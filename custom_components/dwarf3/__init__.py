@@ -7,11 +7,17 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import RelayClient, RelayError
-from .const import CONF_TOKEN
-from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator
+from .const import CONF_MODE, CONF_TOKEN, MODE_DIRECT, MODE_RELAY
+from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator, Dwarf3DirectCoordinator
+from .direct import ScopeDirectClient
 from .services import async_setup_services
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.CAMERA, Platform.EVENT, Platform.SENSOR]
+DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
+
+
+def platforms_for(entry: Dwarf3ConfigEntry) -> list[Platform]:
+    return DIRECT_PLATFORMS if entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT else PLATFORMS
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -20,6 +26,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bool:
+    if entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT:
+        direct = Dwarf3DirectCoordinator(
+            hass, entry, ScopeDirectClient(async_get_clientsession(hass), entry.data[CONF_HOST])
+        )
+        await direct.async_config_entry_first_refresh()
+        entry.runtime_data = direct
+        await hass.config_entries.async_forward_entry_setups(entry, DIRECT_PLATFORMS)
+        entry.async_on_unload(entry.add_update_listener(_reload))
+        return True
     client = RelayClient(
         async_get_clientsession(hass), entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data.get(CONF_TOKEN)
     )
@@ -41,4 +56,4 @@ async def _reload(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    return await hass.config_entries.async_unload_platforms(entry, platforms_for(entry))

@@ -58,14 +58,16 @@ async def setup(hass: HomeAssistant) -> MockConfigEntry:
 async def test_config_flow_creates_entry(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
     mock_relay(aioclient_mock)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], USER)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == USER
+    assert result["data"] == {**USER, "mode": "relay"}
 
 
 async def test_config_flow_unreachable(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
     aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], USER)
     assert result["errors"] == {"base": "cannot_connect"}
 
@@ -73,6 +75,7 @@ async def test_config_flow_unreachable(hass: HomeAssistant, aioclient_mock: Aioh
 async def test_config_flow_bad_token(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
     mock_relay(aioclient_mock, move_code=401)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], USER)
     assert result["errors"] == {"base": "invalid_auth"}
 
@@ -80,6 +83,7 @@ async def test_config_flow_bad_token(hass: HomeAssistant, aioclient_mock: Aiohtt
 async def test_config_flow_refuses_other_major_version(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
     aioclient_mock.get(f"{BASE}/api/capabilities", json={**CAPS, "spec_version": "1.0"})
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], USER)
     assert result["errors"] == {"base": "unsupported_version"}
 
@@ -297,3 +301,116 @@ async def test_delete_session_service_and_its_guard(hass: HomeAssistant, aioclie
         await hass.services.async_call(
             DOMAIN, "delete_session", {"device_id": "x", "session": "DWARF_RAW_../etc"}, blocking=True
         )
+
+
+SCOPE = "http://scope.test:8082"
+DEVICE_INFO = {
+    "code": 0,
+    "data": {
+        "sdCardInfo": {"hasSdcard": True, "availableSize": 31.0, "totalSize": 64.0},
+        "wifiPassword": "hunter2",  # the real reply has this in clear text, and it must never leave the integration
+    },
+}
+SESSIONS = [
+    "DWARF_RAW_TELE_IC 1396_EXP_30_GAIN_60_2026-11-14-18-36-13-703",
+    "DWARF_RAW_TELE_M 31_EXP_15_GAIN_60_2026-11-05-22-57-32-526",
+]
+
+
+async def setup_direct(hass: HomeAssistant, monkeypatch) -> MockConfigEntry:
+    from custom_components.dwarf3.direct import ScopeDirectClient
+
+    monkeypatch.setattr(ScopeDirectClient, "list_sessions_blocking", lambda self: SESSIONS)
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: "scope.test", "mode": "direct"}, unique_id="direct:scope.test"
+    )
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_direct_config_flow(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "direct"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_HOST: "scope.test", "mode": "direct"}
+
+
+async def test_direct_config_flow_errors(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", exc=TimeoutError)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "direct"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    assert result["errors"] == {"base": "cannot_connect"}
+
+    aioclient_mock.clear_requests()
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json={"hello": "router"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    assert result["errors"] == {"base": "not_a_scope"}
+
+
+async def test_direct_mode_has_only_what_the_scope_gives_out(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("binary_sensor.dwarf_3_connectivity").state == "on"
+    assert hass.states.get("sensor.dwarf_3_sd_card_free").state == "31.0"
+    assert hass.states.get("sensor.dwarf_3_sd_card_used").state == "51.6"
+    sessions = hass.states.get("sensor.dwarf_3_capture_sessions")
+    assert sessions.state == "2"
+    assert sessions.attributes["sessions"] == SESSIONS
+    for entity in ("sensor.dwarf_3_battery", "button.dwarf_3_close_barrel", "camera.dwarf_3_wide_camera",
+                   "binary_sensor.dwarf_3_tracking", "event.dwarf_3_capture_finished"):
+        assert hass.states.get(entity) is None, entity + " needs the control connection"
+
+
+async def test_direct_mode_survives_a_scope_that_is_off(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", exc=TimeoutError)
+    entry = await setup_direct(hass, monkeypatch)
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("binary_sensor.dwarf_3_connectivity").state == "off"
+    assert hass.states.get("sensor.dwarf_3_sd_card_free").state == "unknown"
+
+
+async def test_direct_mode_never_opens_the_control_connection(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    await setup_direct(hass, monkeypatch)
+    assert {(c[0], c[1].port) for c in aioclient_mock.mock_calls} == {("POST", 8082)}
+
+
+async def test_direct_mode_services_are_refused(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    import pytest
+    from homeassistant.exceptions import ServiceValidationError
+
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    with pytest.raises(ServiceValidationError, match="read-only"):
+        await hass.services.async_call(
+            DOMAIN,
+            "goto",
+            {"device_id": device.id, "name": "M42", "ra_hours": 5.5, "dec_degrees": -5.4},
+            blocking=True,
+        )
+
+
+async def test_diagnostics_hide_the_wifi_password(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    from custom_components.dwarf3.diagnostics import async_get_config_entry_diagnostics
+
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    out = await async_get_config_entry_diagnostics(hass, entry)
+    text = str(out)
+    assert "hunter2" not in text and "scope.test" not in text
+    assert "wifiPassword" in out["device_info_keys"], "key names help us learn the format, values never leave"
+
+
+def test_sessions_are_ordered_by_the_time_in_the_name():
+    from custom_components.dwarf3.direct import session_order
+
+    ordered = sorted(SESSIONS, key=session_order)
+    assert ordered[-1].startswith("DWARF_RAW_TELE_IC 1396"), "Nov 14 is newer than Nov 5, whatever the target name"

@@ -15,7 +15,9 @@ from homeassistant.components.sensor import (
 from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
+from .const import CONF_MODE, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator
 from .entity import Dwarf3Entity
 
@@ -25,6 +27,10 @@ JOB_STATES = ["idle", "running", "done", "failed"]
 @dataclass(frozen=True, kw_only=True)
 class Dwarf3SensorDescription(SensorEntityDescription):
     value: Callable[[dict[str, Any]], Any]
+
+
+# What the scope gives out without the relay. The rest needs the control connection.
+DIRECT_SENSOR_KEYS = {"sd_free", "sd_used", "sd_total"}
 
 
 def _job(data: dict[str, Any], key: str) -> Any:
@@ -188,6 +194,10 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: Dwarf3ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     coordinator = entry.runtime_data
+    if entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT:
+        async_add_entities(Dwarf3Sensor(coordinator, d) for d in SENSORS if d.key in DIRECT_SENSOR_KEYS)
+        async_add_entities([Dwarf3DirectSessionsSensor(coordinator)])
+        return
     async_add_entities(Dwarf3Sensor(coordinator, description) for description in SENSORS)
     async_add_entities([Dwarf3SessionsSensor(coordinator), Dwarf3RelayVersionSensor(coordinator)])
 
@@ -249,3 +259,23 @@ class Dwarf3RelayVersionSensor(Dwarf3Entity, SensorEntity):
     @property
     def native_value(self) -> str | None:
         return self.coordinator.relay_version
+
+
+class Dwarf3DirectSessionsSensor(Dwarf3Entity, SensorEntity):
+    """Capture sessions on the SD card, listed over FTP every 10 minutes."""
+
+    _attr_translation_key = "sessions"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: DataUpdateCoordinator[dict[str, Any]]) -> None:
+        super().__init__(coordinator, "sessions")
+
+    @property
+    def native_value(self) -> int | None:
+        sessions = self.coordinator.data.get("sessions")
+        return None if sessions is None else len(sessions)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        sessions = self.coordinator.data.get("sessions")
+        return None if sessions is None else {"sessions": sessions[-20:]}

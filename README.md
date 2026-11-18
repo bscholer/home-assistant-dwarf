@@ -13,18 +13,28 @@ This repo holds two things:
 The integration talks to the relay over its HTTP API and shares no code with it. It reads `/api/capabilities` and refuses a
 relay whose spec major version it does not know.
 
-## Why a relay
+## Two ways to connect
 
-The scope accepts one control client. The relay holds that connection and lets the DWARFLAB app, Home Assistant, and tools
-such as astrolab share it. The relay must be on the scope's Wi-Fi network and reachable from Home Assistant.
+When you add the integration you choose one.
 
-## Setup
+**Read-only, straight from the scope.** Nothing to install. You give the integration the scope's IP address and it reads what the
+scope gives out over plain HTTP and FTP: whether it is reachable, the SD card free, used and size (size only if the scope reports it),
+and the capture sessions. It never takes the scope's one control connection, so the DWARFLAB app keeps working. It cannot show battery,
+temperatures or state, and it has no camera or controls, because the scope only sends those to the client that holds the control connection.
+
+**Full control, through the relay.** The relay holds that one connection and lets the DWARFLAB app, Home Assistant, and tools such as
+astrolab share it. It gives everything below. The relay must be on the scope's Wi-Fi network and reachable from Home Assistant.
+
+You can add both. Only the relay mode gives the app a place to share the connection, so do not run the relay and read-only mode
+expecting the app to see Home Assistant's stats: the relay's entities are the ones that carry battery and the rest.
+
+## Setup, full control
 
 1. Install and start the app, with `scope_host` set to the scope's IP. Read the API token in the app log, or set your own.
 2. Enter the Home Assistant host's IP in the DWARFLAB app as the scope.
-3. Add the **DWARF 3 Smart Telescope** integration with the host, port 9902, and the token.
+3. Add the **DWARF 3 Smart Telescope** integration, choose **Full control**, and give it the host, port 9902, and the token.
 
-## Entities
+## Entities (full control)
 
 | Kind | Entities |
 |---|---|
@@ -75,3 +85,8 @@ This project is not affiliated with DWARFLAB.
 ## License
 
 MIT, see `LICENSE`.
+
+## Diagnostics
+
+Download diagnostics from the device page. In read-only mode it lists the names of the fields the scope returns, never their values,
+because the scope's `deviceInfo` reply includes the home Wi-Fi password in clear text. The integration reads only the SD card figures.

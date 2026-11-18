@@ -14,3 +14,10 @@ SUPPORTED_SPEC_MAJOR = 0
 
 EXPOSURES = ["15", "30", "60"]
 FILTERS = ["vis", "astro", "duo"]
+
+CONF_MODE = "mode"
+MODE_RELAY = "relay"
+MODE_DIRECT = "direct"
+DIRECT_DEFAULT_SCAN_INTERVAL = 60
+SCOPE_API_PORT = 8082
+ALBUM_ROOT = "/Astronomy"
