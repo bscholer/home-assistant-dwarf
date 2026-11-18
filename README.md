@@ -28,20 +28,27 @@ such as astrolab share it. The relay must be on the scope's Wi-Fi network and re
 
 | Kind | Entities |
 |---|---|
-| Sensor | Capture state (idle, running, done, failed), frames captured, battery, body temperature, SD card free |
-| Sensor, diagnostic | Frames failed, tele and wide sensor temperature, pitch and rotation (off by default) |
-| Binary sensor | Scope reachable, DWARFLAB app connected, capturing from another client |
+| Sensor | Capture state (idle, running, done, failed), capture progress, frames captured, battery, body temperature, SD card free and used, capture sessions |
+| Sensor, diagnostic | Frames failed, tele and wide sensor temperature, tele and wide dark counts, relay version, SD card size, pitch and rotation, goto and calibration state codes (the last four are off by default) |
+| Binary sensor | Tracking, scope reachable, DWARFLAB app connected, capturing from another client |
+| Event | Capture finished (`capture_done` or `capture_failed`, with the frame counts and session) |
 | Button | Close barrel, stop capture, prepare, calibrate |
 | Camera | Wide camera snapshot |
 
-Capture state carries `frames`, `captured`, `failed`, `session`, and `error` as attributes.
+Capture state carries `frames`, `captured`, `failed`, `session`, and `error` as attributes. Tracking, SD card size, and the state
+codes need relay 0.3.0 or later and read as unknown on an older relay. The goto and calibration codes are shown as the scope sends
+them, and what each number means is not confirmed yet. Capture sessions is read every 10 minutes, because it reads the scope's album.
 
 ## Services
 
+All take a DWARF 3 device as the target.
+
 - `dwarf3.goto`: `name`, `ra_hours`, `dec_degrees` (J2000). The relay refuses a target within 30 degrees of the Sun.
 - `dwarf3.start_capture`: `frames`, `exposure` (15, 30, 60), `gain`, `filter` (vis, astro, duo).
-
-Both take a DWARF 3 device as the target.
+- `dwarf3.start_dark`: `frames`, `exposure`, `wide`. Close the barrel first.
+- `dwarf3.move`: `angle`, `length` (0 to 1), `seconds` (up to 5). The joystick.
+- `dwarf3.point`: `pitch` (0 to 175, 172.5 is straight up) and optional `rotation`.
+- `dwarf3.delete_session`: `session`. Deletes a capture session from the SD card. It cannot be undone and is refused while a capture runs.
 
 ## Auth
 

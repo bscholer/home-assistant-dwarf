@@ -94,6 +94,21 @@ class RelayClient:
     async def calibrate(self) -> None:
         await self._request("POST", "/api/calibrate", timeout=480)
 
+    async def sessions(self) -> list[str]:
+        return (await self._request("GET", "/api/sessions", timeout=60))["sessions"]
+
+    async def start_dark(self, frames: int, exposure: str, wide: bool) -> None:
+        await self._request("POST", "/api/dark", json={"frames": frames, "exposure": exposure, "wide": wide})
+
+    async def move(self, angle: float, length: float, seconds: float) -> None:
+        await self._request("POST", "/api/move", json={"angle": angle, "length": length, "seconds": seconds})
+
+    async def point(self, pitch: float, rotation: float | None) -> None:
+        await self._request("POST", "/api/point", json={"pitch": pitch, "rotation": rotation}, timeout=120)
+
+    async def delete_session(self, session: str) -> None:
+        await self._request("POST", "/api/sessions/delete", json={"session": session}, timeout=120)
+
     async def goto(self, name: str, ra_hours: float, dec_degrees: float) -> None:
         await self._request(
             "POST", "/api/goto", json={"name": name, "ra_hours": ra_hours, "dec_degrees": dec_degrees}, timeout=180

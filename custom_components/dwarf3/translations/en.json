@@ -15,7 +15,9 @@
       },
       "reauth_confirm": {
         "title": "The relay refused the token",
-        "data": { "token": "API token" }
+        "data": {
+          "token": "API token"
+        }
       }
     },
     "error": {
@@ -32,7 +34,9 @@
   "options": {
     "step": {
       "init": {
-        "data": { "scan_interval": "Seconds between status reads" }
+        "data": {
+          "scan_interval": "Seconds between status reads"
+        }
       }
     }
   },
@@ -40,29 +44,110 @@
     "sensor": {
       "job_state": {
         "name": "Capture state",
-        "state": { "idle": "Idle", "running": "Capturing", "done": "Done", "failed": "Failed" }
+        "state": {
+          "idle": "Idle",
+          "running": "Capturing",
+          "done": "Done",
+          "failed": "Failed"
+        }
       },
-      "frames_captured": { "name": "Frames captured", "unit_of_measurement": "frames" },
-      "frames_failed": { "name": "Frames failed", "unit_of_measurement": "frames" },
-      "device_temperature": { "name": "Body temperature" },
-      "tele_sensor_temperature": { "name": "Tele sensor temperature" },
-      "wide_sensor_temperature": { "name": "Wide sensor temperature" },
-      "sd_free": { "name": "SD card free" },
-      "pitch": { "name": "Pitch" },
-      "rotation": { "name": "Rotation" }
+      "frames_captured": {
+        "name": "Frames captured",
+        "unit_of_measurement": "frames"
+      },
+      "frames_failed": {
+        "name": "Frames failed",
+        "unit_of_measurement": "frames"
+      },
+      "device_temperature": {
+        "name": "Body temperature"
+      },
+      "tele_sensor_temperature": {
+        "name": "Tele sensor temperature"
+      },
+      "wide_sensor_temperature": {
+        "name": "Wide sensor temperature"
+      },
+      "sd_free": {
+        "name": "SD card free"
+      },
+      "pitch": {
+        "name": "Pitch"
+      },
+      "rotation": {
+        "name": "Rotation"
+      },
+      "capture_progress": {
+        "name": "Capture progress"
+      },
+      "sd_used": {
+        "name": "SD card used"
+      },
+      "sd_total": {
+        "name": "SD card size"
+      },
+      "tele_darks": {
+        "name": "Tele darks"
+      },
+      "wide_darks": {
+        "name": "Wide darks"
+      },
+      "goto_state": {
+        "name": "Goto state code"
+      },
+      "calibration_state": {
+        "name": "Calibration state code"
+      },
+      "sessions": {
+        "name": "Capture sessions",
+        "unit_of_measurement": "sessions"
+      },
+      "relay_version": {
+        "name": "Relay version"
+      }
     },
     "binary_sensor": {
-      "app_connected": { "name": "DWARFLAB app connected" },
-      "busy_elsewhere": { "name": "Capturing from another client" }
+      "app_connected": {
+        "name": "DWARFLAB app connected"
+      },
+      "busy_elsewhere": {
+        "name": "Capturing from another client"
+      },
+      "tracking": {
+        "name": "Tracking"
+      }
     },
     "button": {
-      "close_barrel": { "name": "Close barrel" },
-      "stop_capture": { "name": "Stop capture" },
-      "prepare": { "name": "Prepare" },
-      "calibrate": { "name": "Calibrate" }
+      "close_barrel": {
+        "name": "Close barrel"
+      },
+      "stop_capture": {
+        "name": "Stop capture"
+      },
+      "prepare": {
+        "name": "Prepare"
+      },
+      "calibrate": {
+        "name": "Calibrate"
+      }
     },
     "camera": {
-      "wide_camera": { "name": "Wide camera" }
+      "wide_camera": {
+        "name": "Wide camera"
+      }
+    },
+    "event": {
+      "capture_finished": {
+        "name": "Capture finished",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "capture_done": "Done",
+              "capture_failed": "Failed"
+            }
+          }
+        }
+      }
     }
   },
   "services": {
@@ -70,19 +155,100 @@
       "name": "Go to target",
       "description": "Slew to a target and track it. The relay refuses a target near the Sun.",
       "fields": {
-        "name": { "name": "Name", "description": "A label for the target." },
-        "ra_hours": { "name": "Right ascension", "description": "J2000, in hours." },
-        "dec_degrees": { "name": "Declination", "description": "J2000, in degrees." }
+        "name": {
+          "name": "Name",
+          "description": "A label for the target."
+        },
+        "ra_hours": {
+          "name": "Right ascension",
+          "description": "J2000, in hours."
+        },
+        "dec_degrees": {
+          "name": "Declination",
+          "description": "J2000, in degrees."
+        }
       }
     },
     "start_capture": {
       "name": "Start capture",
       "description": "Start a capture job that stops at the frame count.",
       "fields": {
-        "frames": { "name": "Frames", "description": "How many frames to take." },
-        "exposure": { "name": "Exposure", "description": "Seconds per frame." },
-        "gain": { "name": "Gain", "description": "The scope gain number." },
-        "filter": { "name": "Filter", "description": "vis, astro, or duo." }
+        "frames": {
+          "name": "Frames",
+          "description": "How many frames to take."
+        },
+        "exposure": {
+          "name": "Exposure",
+          "description": "Seconds per frame."
+        },
+        "gain": {
+          "name": "Gain",
+          "description": "The scope gain number."
+        },
+        "filter": {
+          "name": "Filter",
+          "description": "vis, astro, or duo."
+        }
+      }
+    },
+    "start_dark": {
+      "name": "Start darks",
+      "description": "Take dark frames. Close the barrel first.",
+      "fields": {
+        "frames": {
+          "name": "Frames",
+          "description": "How many dark frames to take."
+        },
+        "exposure": {
+          "name": "Exposure",
+          "description": "Seconds per frame."
+        },
+        "wide": {
+          "name": "Wide camera",
+          "description": "Use the wide camera instead of the tele."
+        }
+      }
+    },
+    "move": {
+      "name": "Move",
+      "description": "Move with the joystick for a few seconds.",
+      "fields": {
+        "angle": {
+          "name": "Angle",
+          "description": "Degrees. 0 turns right."
+        },
+        "length": {
+          "name": "Speed",
+          "description": "Joystick deflection, 0 to 1."
+        },
+        "seconds": {
+          "name": "Seconds",
+          "description": "How long to move, up to 5."
+        }
+      }
+    },
+    "point": {
+      "name": "Point",
+      "description": "Move the motors to absolute positions. 172.5 pitch is straight up.",
+      "fields": {
+        "pitch": {
+          "name": "Pitch",
+          "description": "0 to 175."
+        },
+        "rotation": {
+          "name": "Rotation",
+          "description": "0 to 360. Leave empty to keep it."
+        }
+      }
+    },
+    "delete_session": {
+      "name": "Delete session",
+      "description": "Delete one capture session from the SD card. This cannot be undone. Refused while a capture runs.",
+      "fields": {
+        "session": {
+          "name": "Session",
+          "description": "The folder name, starting with DWARF_RAW_."
+        }
       }
     }
   }

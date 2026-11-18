@@ -56,3 +56,85 @@ start_capture:
       selector:
         select:
           options: [vis, astro, duo]
+start_dark:
+  target:
+    device:
+      integration: dwarf3
+  fields:
+    frames:
+      required: true
+      example: 20
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box
+    exposure:
+      default: "15"
+      selector:
+        select:
+          options: ["15", "30", "60"]
+    wide:
+      default: false
+      selector:
+        boolean:
+move:
+  target:
+    device:
+      integration: dwarf3
+  fields:
+    angle:
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 360
+          mode: box
+    length:
+      default: 0.3
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 0.05
+          mode: slider
+    seconds:
+      default: 1
+      selector:
+        number:
+          min: 0.1
+          max: 5
+          step: 0.1
+          mode: slider
+point:
+  target:
+    device:
+      integration: dwarf3
+  fields:
+    pitch:
+      required: true
+      example: 172.5
+      selector:
+        number:
+          min: 0
+          max: 175
+          step: any
+          mode: box
+    rotation:
+      selector:
+        number:
+          min: 0
+          max: 360
+          step: any
+          mode: box
+delete_session:
+  target:
+    device:
+      integration: dwarf3
+  fields:
+    session:
+      required: true
+      example: DWARF_RAW_EXAMPLE
+      selector:
+        text:

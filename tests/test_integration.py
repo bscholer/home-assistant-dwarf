@@ -9,7 +9,11 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.dwarf3.const import CONF_TOKEN, DOMAIN
 
 BASE = "http://relay.test:9902"
-CAPS = {"spec_version": "0.1", "service": {"name": "dwarf3-relay"}, "capabilities": ["status", "goto", "capture"]}
+CAPS = {
+    "spec_version": "0.1",
+    "service": {"name": "dwarf3-relay", "version": "0.3.0"},
+    "capabilities": ["status", "goto", "capture"],
+}
 STATUS = {
     "app_connected": True,
     "busy_elsewhere": False,
@@ -25,6 +29,13 @@ STATUS = {
     "tele_sensor_temperature_c": 41,
     "wide_sensor_temperature_c": 39,
     "scope_reachable": True,
+    "sd_total_gb": 64,
+    "tele_darks": 18,
+    "wide_darks": 3,
+    "tracking_state": 1,
+    "goto_state": 0,
+    "calibration_state": 0,
+    "capture_state": 1,
 }
 USER = {CONF_HOST: "relay.test", CONF_PORT: 9902, CONF_TOKEN: "secret"}
 
@@ -33,6 +44,7 @@ def mock_relay(mock: AiohttpClientMocker, status=STATUS, status_code=200, move_c
     mock.get(f"{BASE}/api/capabilities", json=CAPS)
     mock.get(f"{BASE}/api/status", json=status, status=status_code)
     mock.post(f"{BASE}/api/move", json={"detail": "x", "code": "invalid_request"}, status=move_code)
+    mock.get(f"{BASE}/api/sessions", json={"sessions": ["DWARF_RAW_a", "DWARF_RAW_b", "DWARF_RAW_c"]})
 
 
 async def setup(hass: HomeAssistant) -> MockConfigEntry:
@@ -190,3 +202,98 @@ async def test_camera_error_names_the_prepare_step(hass: HomeAssistant, aioclien
     await setup(hass)
     with pytest.raises(HomeAssistantError, match="Prepare"):
         await async_get_image(hass, "camera.dwarf_3_wide_camera")
+
+
+async def test_new_sensors(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    state = hass.states.get
+    assert state("sensor.dwarf_3_capture_progress").state == "35.0"
+    assert state("sensor.dwarf_3_sd_card_used").state == "13.3"  # 55.5 GB free of 64
+    assert state("sensor.dwarf_3_tele_darks").state == "18"
+    assert state("sensor.dwarf_3_wide_darks").state == "3"
+    assert state("sensor.dwarf_3_capture_sessions").state == "3"
+    assert state("sensor.dwarf_3_relay_version").state == "0.3.0"
+    assert state("binary_sensor.dwarf_3_tracking").state == "on"
+
+
+async def test_new_sensors_stay_unknown_on_an_older_relay(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    older = {k: v for k, v in STATUS.items() if k not in ("tracking_state", "sd_total_gb", "tele_darks")}
+    aioclient_mock.get(f"{BASE}/api/capabilities", json={**CAPS, "service": {"name": "dwarf3-relay"}})
+    mock_relay(aioclient_mock, status=older)
+    await setup(hass)
+    assert hass.states.get("binary_sensor.dwarf_3_tracking").state == "unknown"
+    assert hass.states.get("sensor.dwarf_3_sd_card_used").state == "unknown"
+    assert hass.states.get("sensor.dwarf_3_relay_version").state == "unknown"
+
+
+async def test_capture_finished_event_fires_once_per_job(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    event_id = "event.dwarf_3_capture_finished"
+    assert hass.states.get(event_id).state == "unknown", "a running job is not a finish"
+
+    done = {**STATUS, "job": {**STATUS["job"], "state": "done", "captured": 20}}
+    aioclient_mock.clear_requests()
+    mock_relay(aioclient_mock, status=done)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    first = hass.states.get(event_id)
+    assert first.attributes["event_type"] == "capture_done"
+    assert first.attributes["captured"] == 20 and first.attributes["session"] == "DWARF_RAW_x"
+
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(event_id).state == first.state, "same job, no second event"
+
+    failed = {**STATUS, "job": {**STATUS["job"], "id": "cd34", "state": "failed", "error": "scope left"}}
+    aioclient_mock.clear_requests()
+    mock_relay(aioclient_mock, status=failed)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get(event_id).attributes["event_type"] == "capture_failed"
+
+
+async def test_job_finished_before_startup_does_not_fire(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    finished = {**STATUS, "job": {**STATUS["job"], "state": "done"}}
+    mock_relay(aioclient_mock, status=finished)
+    await setup(hass)
+    assert hass.states.get("event.dwarf_3_capture_finished").state == "unknown"
+
+
+async def _call_service(hass, aioclient_mock, service, path, data):
+    aioclient_mock.post(f"{BASE}{path}", json={"message": "ok"})  # first, so it wins over mock_relay's own
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    await hass.services.async_call(DOMAIN, service, {"device_id": device.id, **data}, blocking=True)
+    return [c for c in aioclient_mock.mock_calls if c[1].path == path and c[0] == "POST"][0][2]
+
+
+async def test_start_dark_service(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    body = await _call_service(hass, aioclient_mock, "start_dark", "/api/dark", {"frames": 10, "wide": True})
+    assert body == {"frames": 10, "exposure": "15", "wide": True}
+
+
+async def test_move_service(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    body = await _call_service(hass, aioclient_mock, "move", "/api/move", {"angle": 90, "seconds": 2})
+    assert body == {"angle": 90.0, "length": 0.3, "seconds": 2.0}
+
+
+async def test_point_service(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    body = await _call_service(hass, aioclient_mock, "point", "/api/point", {"pitch": 172.5})
+    assert body == {"pitch": 172.5, "rotation": None}
+
+
+async def test_delete_session_service_and_its_guard(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    import pytest
+    import voluptuous as vol
+
+    body = await _call_service(
+        hass, aioclient_mock, "delete_session", "/api/sessions/delete", {"session": "DWARF_RAW_TELE_IC 1396_EXP_30"}
+    )
+    assert body == {"session": "DWARF_RAW_TELE_IC 1396_EXP_30"}, "real names have spaces"
+    with pytest.raises(vol.Invalid):
+        await hass.services.async_call(
+            DOMAIN, "delete_session", {"device_id": "x", "session": "DWARF_RAW_../etc"}, blocking=True
+        )

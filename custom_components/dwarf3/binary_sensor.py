@@ -32,6 +32,11 @@ BINARY_SENSORS: tuple[Dwarf3BinaryDescription, ...] = (
         value=lambda d: d.get("scope_reachable"),
     ),
     Dwarf3BinaryDescription(
+        key="tracking",
+        translation_key="tracking",
+        value=lambda d: None if d.get("tracking_state") is None else d["tracking_state"] == 1,
+    ),
+    Dwarf3BinaryDescription(
         key="app_connected",
         translation_key="app_connected",
         entity_category=EntityCategory.DIAGNOSTIC,
