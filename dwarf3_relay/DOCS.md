@@ -15,7 +15,7 @@ without the relay the DWARFLAB app and Home Assistant would lock each other out.
 | Option | Meaning |
 |---|---|
 | `scope_host` | IP address of the scope. Required. |
-| `api_token` | Bearer token for control. Empty makes one and prints it to the log. |
+| `api_token` | Access token for control. Use a long random string, such as the output of `openssl rand -hex 24`. Empty makes one and prints it to the log. |
 | `auth` | Turn off to let any device on your network control the scope. |
 | `latitude`, `longitude`, `timezone` | Your site, for the Prepare button. Empty means Prepare fails. Nothing is guessed. |
 
