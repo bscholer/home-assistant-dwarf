@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from typing import Any
 
@@ -13,7 +14,9 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
+from . import app_setup
 from .api import RelayClient, RelayError, RelayUnauthorized, RelayUnreachable
+from .app_setup import AppSetupError
 from .const import (
     CONF_MODE,
     CONF_SCAN_INTERVAL,
@@ -37,6 +40,8 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._scope_host: str | None = None  # a scope found by DHCP, or the one a read-only entry was using
         self._relay: dict[str, Any] | None = None  # a relay found on this Home Assistant
+        self._install_task: asyncio.Task[None] | None = None
+        self._install_error = ""
 
     # ---- helpers
 
@@ -85,15 +90,15 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured()
         return self.async_create_entry(title=title, data=data)
 
-    def _previous_scope_host(self) -> str:
-        """The scope's address, for the text that tells people what to enter in the app."""
+    def _known_scope_host(self) -> str | None:
+        """The scope's address when something already told us: discovery, or the read-only entry being switched."""
         if self._scope_host:
             return self._scope_host
         if self.source == SOURCE_RECONFIGURE:
             entry = self._get_reconfigure_entry()
             if entry.data.get(CONF_MODE) == MODE_DIRECT:
                 return entry.data[CONF_HOST]
-        return "your scope's IP address"
+        return None
 
     # ---- first setup
 
@@ -142,13 +147,19 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="direct", data_schema=schema, errors=errors)
 
     async def async_step_relay(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Full control, through the relay. Look for it on this Home Assistant first, so it is one click."""
+        """Full control, through the relay. Use one already on this Home Assistant, so it is one click."""
+        local = await self._local_ip()
+        if local and await self._check(local, DEFAULT_PORT, None) is None:
+            self._relay = {CONF_HOST: local, CONF_PORT: DEFAULT_PORT, CONF_TOKEN: None, CONF_MODE: MODE_RELAY}
+            return await self.async_step_relay_found()
+        if local and app_setup.has_supervisor(self.hass):
+            return self.async_show_menu(step_id="relay", menu_options=["relay_install", "relay_manual"])
+        return await self.async_step_relay_manual()
+
+    async def async_step_relay_manual(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """A relay at an address the person types, for example one running in Docker elsewhere."""
         local = await self._local_ip()
         errors: dict[str, str] = {}
-        if user_input is None and local:
-            if await self._check(local, DEFAULT_PORT, None) is None:
-                self._relay = {CONF_HOST: local, CONF_PORT: DEFAULT_PORT, CONF_TOKEN: None, CONF_MODE: MODE_RELAY}
-                return await self.async_step_relay_found()
         if user_input is not None:
             host, port = user_input[CONF_HOST].strip(), user_input[CONF_PORT]
             token = user_input.get(CONF_TOKEN) or None
@@ -167,12 +178,65 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_TOKEN): str,
             }
         )
-        return self.async_show_form(
-            step_id="relay",
-            data_schema=schema,
-            errors=errors,
-            description_placeholders={"scope": self._previous_scope_host()},
+        return self.async_show_form(step_id="relay_manual", data_schema=schema, errors=errors)
+
+    async def async_step_relay_install(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Install and set up the relay app for the person. Ask for the scope's address only if we do not know it."""
+        errors: dict[str, str] = {}
+        if self._known_scope_host() is None:
+            if user_input is not None:
+                host = user_input[CONF_HOST].strip()
+                if error := await self._check_scope(host):
+                    errors["base"] = error
+                else:
+                    self._scope_host = host
+            if self._scope_host is None:
+                default = (user_input or {}).get(CONF_HOST, vol.UNDEFINED)
+                schema = vol.Schema({vol.Required(CONF_HOST, default=default): str})
+                return self.async_show_form(step_id="relay_install", data_schema=schema, errors=errors)
+        self._install_task = None  # a fresh attempt
+        return await self.async_step_relay_install_run()
+
+    async def _install_relay_app(self, scope_host: str) -> None:
+        local = await self._local_ip()
+        if not local:
+            raise AppSetupError("Could not work out this Home Assistant's address.")
+
+        async def ready() -> str | None:
+            return await self._check(local, DEFAULT_PORT, None)
+
+        await app_setup.install_relay_app(self.hass, scope_host, ready)
+        self._relay = {CONF_HOST: local, CONF_PORT: DEFAULT_PORT, CONF_TOKEN: None, CONF_MODE: MODE_RELAY}
+
+    async def async_step_relay_install_run(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if self._install_task is None:
+            scope = self._known_scope_host()
+            assert scope
+            self._install_task = self.hass.async_create_task(self._install_relay_app(scope))
+        if not self._install_task.done():
+            return self.async_show_progress(
+                step_id="relay_install_run", progress_action="install_app", progress_task=self._install_task
+            )
+        task, self._install_task = self._install_task, None
+        try:
+            await task
+        except AppSetupError as err:
+            self._install_error = str(err)
+            return self.async_show_progress_done(next_step_id="relay_install_failed")
+        return self.async_show_progress_done(next_step_id="relay_ready")
+
+    async def async_step_relay_install_failed(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return self.async_show_menu(
+            step_id="relay_install_failed",
+            menu_options=["relay_install", "relay_manual"],
+            description_placeholders={"error": self._install_error},
         )
+
+    async def async_step_relay_ready(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """The relay app is running. Nothing more to ask."""
+        assert self._relay
+        host, port = self._relay[CONF_HOST], self._relay[CONF_PORT]
+        return await self._finish(data=self._relay, unique_id=f"{host}:{port}", title=f"DWARF 3 relay ({host})")
 
     async def async_step_relay_found(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         assert self._relay
@@ -181,6 +245,11 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
             return await self._finish(data=self._relay, unique_id=f"{host}:{port}", title=f"DWARF 3 relay ({host})")
         self._set_confirm_only()
         return self.async_show_form(step_id="relay_found", description_placeholders={"host": self._relay[CONF_HOST]})
+
+    @callback
+    def async_remove(self) -> None:
+        if self._install_task and not self._install_task.done():
+            self._install_task.cancel()
 
     # ---- change an existing entry
 

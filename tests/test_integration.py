@@ -439,7 +439,7 @@ async def test_no_relay_found_shows_a_form_with_this_home_assistants_address(
     aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
-    assert result["step_id"] == "relay" and result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "relay_manual" and result["type"] is FlowResultType.FORM
     assert [k for k in result["data_schema"].schema if k == CONF_HOST][0].default() == "relay.test"
 
 
@@ -448,7 +448,7 @@ async def test_relay_that_wants_a_token_asks_for_it(hass: HomeAssistant, aioclie
     mock_relay(aioclient_mock, move_code=401)
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
-    assert result["step_id"] == "relay", "falls back to the form, which has a token field"
+    assert result["step_id"] == "relay_manual", "falls back to the form, which has a token field"
 
 
 async def test_a_scope_found_on_the_network_is_offered(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
@@ -547,3 +547,162 @@ async def test_changing_the_scope_address(hass: HomeAssistant, aioclient_mock, m
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "new.test"})
     assert result["reason"] == "reconfigure_successful"
     assert hass.config_entries.async_get_entry(entry.entry_id).data[CONF_HOST] == "new.test"
+
+
+# ---- installing the relay app from the flow
+
+async def _to_the_install_menu(hass):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
+    assert result["type"] is FlowResultType.MENU and result["step_id"] == "relay"
+    return result
+
+
+async def _finish_progress(hass, result):
+    """A slow install shows a progress screen first. A fast one (as in these tests) finishes in one call."""
+    if result["type"] is FlowResultType.SHOW_PROGRESS:
+        await hass.async_block_till_done()
+        result = await hass.config_entries.flow.async_configure(result["flow_id"])
+    return result
+
+
+async def test_flow_installs_and_sets_up_the_relay_app(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    from custom_components.dwarf3.app_setup import APP_REPOSITORY, APP_SLUG
+
+    fake = supervisor()
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await _to_the_install_menu(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_install"})
+    assert result["step_id"] == "relay_install" and result["type"] is FlowResultType.FORM, "asks only for the scope"
+
+    aioclient_mock.clear_requests()  # the app is "running" by the time the flow looks
+    mock_relay(aioclient_mock)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    result = await _finish_progress(hass, result)
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_HOST: "relay.test", CONF_PORT: 9902, CONF_TOKEN: None, "mode": "relay"}
+    assert fake.names() == [
+        "repositories_list", "add_repository", "reload", "addon_info", "install_addon", "addon_info",
+        "set_addon_options", "start_addon",
+    ]
+    assert fake.calls[1][2] == {} and fake.calls[1][1][0].repository == APP_REPOSITORY
+    config = [c for c in fake.calls if c[0] == "set_addon_options"][0][2]["config"]
+    assert config["scope_host"] == "scope.test" and config["auth"] is False
+    assert [c for c in fake.calls if c[0] == "start_addon"][0][1] == (APP_SLUG,)
+
+
+async def test_switching_a_read_only_entry_to_an_installed_relay_asks_nothing(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch, local_ip, supervisor
+):
+    fake = supervisor()
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+
+    result = await entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
+    assert result["step_id"] == "relay", "no relay yet, so offer to install one"
+    aioclient_mock.clear_requests()
+    mock_relay(aioclient_mock)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_install"})
+    result = await _finish_progress(hass, result)
+
+    assert result["type"] is FlowResultType.ABORT and result["reason"] == "reconfigure_successful"
+    config = [c for c in fake.calls if c[0] == "set_addon_options"][0][2]["config"]
+    assert config["scope_host"] == "scope.test", "the scope's address came from the read-only entry"
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.data["mode"] == "relay" and updated.entry_id == entry.entry_id
+
+
+async def test_an_address_the_user_already_entered_in_the_app_is_kept(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    fake = supervisor(installed=True, options={"scope_host": "10.0.0.9", "auth": False}, repos=[
+        "https://github.com/bscholer/home-assistant-dwarf3/"])
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await _to_the_install_menu(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_install"})
+    aioclient_mock.clear_requests()
+    mock_relay(aioclient_mock)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    result = await _finish_progress(hass, result)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert fake.names() == ["repositories_list", "addon_info", "start_addon"], "repo known, nothing to install or set"
+
+
+async def test_install_failure_explains_and_offers_the_manual_way(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    supervisor(fail_on="install_addon")
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await _to_the_install_menu(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_install"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    result = await _finish_progress(hass, result)
+    assert result["type"] is FlowResultType.MENU and result["step_id"] == "relay_install_failed"
+    assert "No space left on device" in result["description_placeholders"]["error"]
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_manual"})
+    assert result["step_id"] == "relay_manual"
+
+
+async def test_an_app_that_never_answers_is_reported(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    supervisor()
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await _to_the_install_menu(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_install"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    result = await _finish_progress(hass, result)
+    assert result["step_id"] == "relay_install_failed"
+    assert "not answering" in result["description_placeholders"]["error"]
+
+
+async def test_a_bad_scope_address_is_caught_before_installing_anything(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    fake = supervisor()
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", exc=TimeoutError)
+    result = await _to_the_install_menu(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_install"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    assert result["step_id"] == "relay_install" and result["errors"] == {"base": "cannot_connect"}
+    assert fake.calls == []
+
+
+async def test_a_slow_install_shows_progress_then_finishes(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    import asyncio
+
+    gate = asyncio.Event()
+    supervisor(gate=gate)
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    result = await _to_the_install_menu(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay_install"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    assert result["type"] is FlowResultType.SHOW_PROGRESS and result["progress_action"] == "install_app"
+
+    aioclient_mock.clear_requests()
+    mock_relay(aioclient_mock)
+    gate.set()
+    result = await _finish_progress(hass, result)
+    assert result["type"] is FlowResultType.CREATE_ENTRY

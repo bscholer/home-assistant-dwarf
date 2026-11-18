@@ -21,12 +21,11 @@
         "description": "Found your scope at {host}. Add it in read-only mode?"
       },
       "relay": {
-        "title": "Connect the relay",
-        "description": "No relay found on this Home Assistant yet. Install the **DWARF 3 relay** app, set its **Telescope IP address** to {scope}, start it, then press Submit.",
-        "data": {
-          "host": "Relay address",
-          "port": "Port",
-          "token": "Access token (only if you turned one on)"
+        "title": "Set up the relay",
+        "description": "The relay is a small Home Assistant app that shares your scope's one connection. It takes about a minute.",
+        "menu_options": {
+          "relay_install": "Install and set it up for me",
+          "relay_manual": "I already have a relay running"
         }
       },
       "relay_found": {
@@ -47,6 +46,30 @@
         "data": {
           "token": "Access token"
         }
+      },
+      "relay_install": {
+        "title": "Your scope's address",
+        "description": "I'll add the DWARF 3 app repository (github.com/bscholer/home-assistant-dwarf3) to Home Assistant, install the relay app, and start it. Enter your scope's IP address, from your router's list of devices.",
+        "data": {
+          "host": "Scope IP address"
+        }
+      },
+      "relay_manual": {
+        "title": "Relay address",
+        "description": "Where is the relay running? Add the access token only if you turned one on.",
+        "data": {
+          "host": "Relay address",
+          "port": "Port",
+          "token": "Access token (optional)"
+        }
+      },
+      "relay_install_failed": {
+        "title": "That didn't work",
+        "description": "{error}",
+        "menu_options": {
+          "relay_install": "Try again",
+          "relay_manual": "I'll set up the app myself"
+        }
       }
     },
     "error": {
@@ -61,6 +84,9 @@
       "not_a_scope": "That device is not a DWARF 3.",
       "reauth_successful": "Token updated.",
       "reconfigure_successful": "Done. Your entities are unchanged."
+    },
+    "progress": {
+      "install_app": "Installing the relay app and starting it. This can take a couple of minutes the first time."
     }
   },
   "options": {

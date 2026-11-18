@@ -15,14 +15,19 @@ That's it. Read-only never touches the scope's one control connection, so the DW
 ## Want more? Full control
 
 Battery, temperatures, the camera, and buttons like **Prepare** and **Close barrel** need a small helper called the
-relay, because the scope only shares those with whatever holds its one control connection. It takes about two minutes:
+relay, because the scope only shares those with whatever holds its one control connection. It takes about a minute, and the
+integration sets it up for you:
 
-1. Add this repository to the Home Assistant app store, install the **DWARF 3 relay** app, enter your scope's IP address,
-   and press **Start**.
-2. Open the DWARF 3 integration, press **⋮ → Reconfigure**, and choose **Full control**. It finds the relay by itself.
+1. Open the DWARF 3 integration, press **⋮ → Reconfigure**, and choose **Full control**.
+2. Choose **Install and set it up for me**. It adds the app repository, installs the **DWARF 3 relay** app, gives it your
+   scope's address and starts it.
 3. In the DWARFLAB app, enter your Home Assistant's IP address as the scope.
 
-Your entities and dashboards stay exactly as they were. You only gain more of them.
+Your entities and dashboards stay exactly as they were. You only gain more of them. Picking **Full control** when you first add
+the integration works the same way.
+
+Prefer to do it by hand? Add `https://github.com/bscholer/home-assistant-dwarf3` to the Home Assistant app store, install **DWARF 3
+relay**, enter your scope's IP address and start it. The integration finds it by itself.
 
 | | Read-only | Full control |
 |---|:-:|:-:|
