@@ -1,0 +1,58 @@
+goto:
+  target:
+    device:
+      integration: dwarf3
+  fields:
+    name:
+      required: true
+      example: "NGC 2174"
+      selector:
+        text:
+    ra_hours:
+      required: true
+      example: 6.1617
+      selector:
+        number:
+          min: 0
+          max: 24
+          step: any
+          mode: box
+    dec_degrees:
+      required: true
+      example: 20.5
+      selector:
+        number:
+          min: -90
+          max: 90
+          step: any
+          mode: box
+start_capture:
+  target:
+    device:
+      integration: dwarf3
+  fields:
+    frames:
+      required: true
+      example: 20
+      selector:
+        number:
+          min: 1
+          max: 500
+          mode: box
+    exposure:
+      default: "15"
+      selector:
+        select:
+          options: ["15", "30", "60"]
+    gain:
+      default: 60
+      selector:
+        number:
+          min: 0
+          max: 200
+          mode: box
+    filter:
+      default: duo
+      selector:
+        select:
+          options: [vis, astro, duo]

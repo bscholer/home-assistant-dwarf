@@ -1,0 +1,28 @@
+name: DWARF 3 relay
+version: "0.1.0"
+slug: dwarf3_relay
+description: Shares one connection to a DWARF 3 telescope between the DWARFLAB app, Home Assistant, and other tools.
+url: https://github.com/bscholer/dwarf3-homeassistant
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+# The DWARFLAB app connects to the relay as if it were the scope, on ports 80, 554, 8082, 8085, 8092, 9900 and 9901,
+# so the relay has to share the host network.
+host_network: true
+options:
+  scope_host: ""
+  api_token: ""
+  auth: true
+  latitude: ""
+  longitude: ""
+  timezone: ""
+schema:
+  scope_host: str
+  api_token: password?
+  auth: bool
+  latitude: str?
+  longitude: str?
+  timezone: str?

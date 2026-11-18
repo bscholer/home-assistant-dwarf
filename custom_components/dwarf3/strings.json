@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to the DWARF 3 relay",
+        "description": "The relay runs on your network and holds the connection to the scope. Install the add-on, or run the relay image yourself.",
+        "data": {
+          "host": "Relay host",
+          "port": "Port",
+          "token": "API token"
+        },
+        "data_description": {
+          "token": "Needed for control. Leave empty only if the relay runs with auth off."
+        }
+      },
+      "reauth_confirm": {
+        "title": "The relay refused the token",
+        "data": { "token": "API token" }
+      }
+    },
+    "error": {
+      "cannot_connect": "The relay did not answer. Check the host and port.",
+      "invalid_auth": "The relay refused the token.",
+      "unsupported_version": "This relay speaks a version of the API this integration does not support.",
+      "unknown": "The relay gave an unexpected answer."
+    },
+    "abort": {
+      "already_configured": "This relay is already set up.",
+      "reauth_successful": "Token updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": { "scan_interval": "Seconds between status reads" }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "job_state": {
+        "name": "Capture state",
+        "state": { "idle": "Idle", "running": "Capturing", "done": "Done", "failed": "Failed" }
+      },
+      "frames_captured": { "name": "Frames captured", "unit_of_measurement": "frames" },
+      "frames_failed": { "name": "Frames failed", "unit_of_measurement": "frames" },
+      "device_temperature": { "name": "Body temperature" },
+      "tele_sensor_temperature": { "name": "Tele sensor temperature" },
+      "wide_sensor_temperature": { "name": "Wide sensor temperature" },
+      "sd_free": { "name": "SD card free" },
+      "pitch": { "name": "Pitch" },
+      "rotation": { "name": "Rotation" }
+    },
+    "binary_sensor": {
+      "app_connected": { "name": "DWARFLAB app connected" },
+      "busy_elsewhere": { "name": "Capturing from another client" }
+    },
+    "button": {
+      "close_barrel": { "name": "Close barrel" },
+      "stop_capture": { "name": "Stop capture" },
+      "prepare": { "name": "Prepare" },
+      "calibrate": { "name": "Calibrate" }
+    },
+    "camera": {
+      "wide_camera": { "name": "Wide camera" }
+    }
+  },
+  "services": {
+    "goto": {
+      "name": "Go to target",
+      "description": "Slew to a target and track it. The relay refuses a target near the Sun.",
+      "fields": {
+        "name": { "name": "Name", "description": "A label for the target." },
+        "ra_hours": { "name": "Right ascension", "description": "J2000, in hours." },
+        "dec_degrees": { "name": "Declination", "description": "J2000, in degrees." }
+      }
+    },
+    "start_capture": {
+      "name": "Start capture",
+      "description": "Start a capture job that stops at the frame count.",
+      "fields": {
+        "frames": { "name": "Frames", "description": "How many frames to take." },
+        "exposure": { "name": "Exposure", "description": "Seconds per frame." },
+        "gain": { "name": "Gain", "description": "The scope gain number." },
+        "filter": { "name": "Filter", "description": "vis, astro, or duo." }
+      }
+    }
+  }
+}
