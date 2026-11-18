@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from typing import Any
 
 import aiohttp
@@ -41,7 +42,12 @@ class RelayClient:
                 method, self._base + path, headers=headers,
                 timeout=aiohttp.ClientTimeout(total=timeout), **kwargs,
             ) as response:
-                body = await response.json(content_type=None)
+                text = await response.text()
+                try:
+                    body = json.loads(text)
+                except ValueError:
+                    # A relay crash answers with plain text, not the {"detail", "code"} shape.
+                    body = {"detail": text.strip()[:200] or f"HTTP {response.status}"}
                 if response.status == 401:
                     raise RelayUnauthorized(_detail(body))
                 if response.status == 409:

@@ -146,3 +146,14 @@ async def test_wide_camera_returns_the_frame(hass: HomeAssistant, aioclient_mock
     assert image.content == b"\xff\xd8jpeg"
     call = [c for c in aioclient_mock.mock_calls if c[1].path == "/api/frame"][0]
     assert call[1].query["camera"] == "wide"
+
+
+async def test_plain_text_error_from_the_relay_is_reported(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    import pytest
+    from homeassistant.exceptions import HomeAssistantError
+
+    mock_relay(aioclient_mock)
+    aioclient_mock.post(f"{BASE}/api/prepare", text="Internal Server Error", status=500)
+    await setup(hass)
+    with pytest.raises(HomeAssistantError, match="Internal Server Error"):
+        await hass.services.async_call("button", "press", {"entity_id": "button.dwarf_3_prepare"}, blocking=True)
