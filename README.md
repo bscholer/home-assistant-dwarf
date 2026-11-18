@@ -55,3 +55,13 @@ With `auth` off on the relay, leave the token empty.
   returns an error, and the *capturing from another client* sensor turns on.
 - The tele camera is not offered. A tele frame waits for a keyframe and can take over a minute.
 - The `prepare` button needs `latitude`, `longitude` and `timezone` in the add-on options. Nothing is guessed.
+
+## Brand images
+
+`custom_components/dwarf3/brand/` holds the icon and logo, which Home Assistant 2026.3 and later shows without anything in the
+brands repository. They are derived from the DWARFLAB logo and belong to DWARFLAB. The MIT license covers the code, not those images.
+This project is not affiliated with DWARFLAB.
+
+## License
+
+MIT, see `LICENSE`.
