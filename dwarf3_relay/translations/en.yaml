@@ -2,30 +2,22 @@ configuration:
   scope_host:
     name: Telescope IP address
     description: >-
-      The IP address of your DWARF 3 on your Wi-Fi network, for example 192.168.1.50.
-      Give the scope a fixed address in your router so it does not change. Required.
+      The IP address of your DWARF 3, for example 192.168.1.50. Find it in your router's list of devices.
+  auth:
+    name: Require an access token
+    description: >-
+      Off is fine for most homes: any device on your network can control the scope, as it already can
+      without the relay. Turn on to require the token below.
   api_token:
     name: Access token
     description: >-
-      A password that Home Assistant and other tools send to control the scope. Use a long random string
-      and keep it private. Leave empty to have the app make one and print it in the Log tab. Enter the same
-      value when you add the integration.
-  auth:
-    name: Require the access token
-    description: >-
-      Keep this on. Turn it off only on a network where every device is trusted, because any device that
-      can reach this app could then move the scope.
+      Only used when the switch above is on. Leave empty and the app makes one and shows it in the Log tab.
   latitude:
-    name: Site latitude
-    description: >-
-      Your observing site, in decimal degrees (for example 41.88). Only the Prepare button needs it.
-      Leave empty to skip. Nothing is guessed.
+    name: Site latitude (optional)
+    description: Leave empty to use this Home Assistant's location. Only the Prepare button uses it.
   longitude:
-    name: Site longitude
-    description: >-
-      Your observing site, in decimal degrees (for example -87.63). Only the Prepare button needs it.
-      Leave empty to skip.
+    name: Site longitude (optional)
+    description: Leave empty to use this Home Assistant's location.
   timezone:
-    name: Site time zone
-    description: >-
-      A time zone name such as America/Chicago. Only the Prepare button needs it. Leave empty to skip.
+    name: Site time zone (optional)
+    description: Leave empty to use this Home Assistant's time zone, or enter a name like America/Chicago.

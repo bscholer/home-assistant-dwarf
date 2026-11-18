@@ -7,6 +7,7 @@ from datetime import timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -33,6 +34,7 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.client = client
         self.relay_version: str | None = None
+        self.platforms: list[Platform] = []  # what was set up, so a mode switch unloads the right ones
         self.sessions = Dwarf3SessionsCoordinator(hass, entry, client)
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -82,6 +84,7 @@ class Dwarf3DirectCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=entry.options.get(CONF_SCAN_INTERVAL, DIRECT_DEFAULT_SCAN_INTERVAL)),
         )
         self.client = client
+        self.platforms: list[Platform] = []
         self._sessions: list[str] | None = None
         self._sessions_at = None
 

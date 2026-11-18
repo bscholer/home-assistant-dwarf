@@ -1,22 +1,18 @@
 # DWARF 3 relay
 
-The relay keeps one connection to the scope and shares it. The scope accepts one control client, so
-without the relay the DWARFLAB app and Home Assistant would lock each other out.
+Your DWARF 3 only talks to one thing at a time. This app holds that connection and shares it, so the
+DWARFLAB app and Home Assistant work together.
 
-## Setup
+## Set up
 
-1. Set `scope_host` to the scope's IP address.
-2. Start the app. If you did not set `api_token`, it makes one and prints it in the app log.
-3. In the DWARFLAB app, enter this Home Assistant host's IP as the scope. The app shows it as `DWARF3_RELAY1`.
-4. Add the **DWARF 3 Smart Telescope** integration and give it this host, port 9902, and the token.
+1. Enter your scope's IP address under **Configuration**. Press **Save**, then **Start**.
+2. In Home Assistant, add the **DWARF 3** integration and choose **Full control**. It finds this app by itself.
+3. In the DWARFLAB app, enter this Home Assistant's IP address as the scope.
 
-## Options
+## Good to know
 
-| Option | Meaning |
-|---|---|
-| `scope_host` | IP address of the scope. Required. |
-| `api_token` | Access token for control. Use a long random string, such as the output of `openssl rand -hex 24`. Empty makes one and prints it to the log. |
-| `auth` | Turn off to let any device on your network control the scope. |
-| `latitude`, `longitude`, `timezone` | Your site, for the Prepare button. Empty means Prepare fails. Nothing is guessed. |
-
-`timezone` is a name such as `America/Chicago`. The UTC offset is read once at start, so restart the app after a clock change.
+- **Prepare** uses your Home Assistant's location. To observe from somewhere else, fill in the optional
+  latitude, longitude and time zone.
+- Anyone on your home network can control the scope through the relay, as they can without it. Turn on
+  **Require an access token** if you share your network. The token appears in the **Log** tab.
+- The scope's IP address can change. Give it a fixed address in your router so you only enter it once.

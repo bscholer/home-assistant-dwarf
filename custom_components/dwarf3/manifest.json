@@ -1,12 +1,22 @@
 {
   "domain": "dwarf3",
   "name": "DWARF 3 Smart Telescope",
-  "codeowners": ["@bscholer"],
+  "codeowners": [
+    "@bscholer"
+  ],
   "config_flow": true,
+  "dependencies": [
+    "network"
+  ],
+  "dhcp": [
+    {
+      "macaddress": "9CB8B4*"
+    }
+  ],
   "documentation": "https://github.com/bscholer/home-assistant-dwarf3",
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/bscholer/home-assistant-dwarf3/issues",
   "requirements": [],
-  "version": "0.3.0"
+  "version": "0.4.0"
 }

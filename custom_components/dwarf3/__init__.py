@@ -16,9 +16,6 @@ PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.CAMERA, Platform.
 DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 
-def platforms_for(entry: Dwarf3ConfigEntry) -> list[Platform]:
-    return DIRECT_PLATFORMS if entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT else PLATFORMS
-
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async_setup_services(hass)
@@ -31,6 +28,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
             hass, entry, ScopeDirectClient(async_get_clientsession(hass), entry.data[CONF_HOST])
         )
         await direct.async_config_entry_first_refresh()
+        direct.platforms = DIRECT_PLATFORMS
         entry.runtime_data = direct
         await hass.config_entries.async_forward_entry_setups(entry, DIRECT_PLATFORMS)
         entry.async_on_unload(entry.add_update_listener(_reload))
@@ -45,6 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     except RelayError:
         pass  # an older relay, or a hiccup: the version sensor stays unknown
     await coordinator.sessions.async_refresh()  # a failure leaves the sessions sensor unavailable, not setup
+    coordinator.platforms = PLATFORMS
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_reload))
@@ -56,4 +55,4 @@ async def _reload(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, platforms_for(entry))
+    return await hass.config_entries.async_unload_platforms(entry, entry.runtime_data.platforms)

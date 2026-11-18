@@ -414,3 +414,136 @@ def test_sessions_are_ordered_by_the_time_in_the_name():
 
     ordered = sorted(SESSIONS, key=session_order)
     assert ordered[-1].startswith("DWARF_RAW_TELE_IC 1396"), "Nov 14 is newer than Nov 5, whatever the target name"
+
+
+# ---- the first-run experience
+
+async def test_relay_on_this_home_assistant_is_found_and_added_in_one_click(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip
+):
+    local_ip("relay.test")
+    mock_relay(aioclient_mock)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
+    assert result["step_id"] == "relay_found", "no form to fill in"
+    assert result["description_placeholders"] == {"host": "relay.test"}
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_HOST: "relay.test", CONF_PORT: 9902, CONF_TOKEN: None, "mode": "relay"}
+
+
+async def test_no_relay_found_shows_a_form_with_this_home_assistants_address(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip
+):
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
+    assert result["step_id"] == "relay" and result["type"] is FlowResultType.FORM
+    assert [k for k in result["data_schema"].schema if k == CONF_HOST][0].default() == "relay.test"
+
+
+async def test_relay_that_wants_a_token_asks_for_it(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip):
+    local_ip("relay.test")
+    mock_relay(aioclient_mock, move_code=401)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "user"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
+    assert result["step_id"] == "relay", "falls back to the form, which has a token field"
+
+
+async def test_a_scope_found_on_the_network_is_offered(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    info = DhcpServiceInfo(ip="scope.test", hostname="dwarf", macaddress="9cb8b457d0ec")
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "dhcp"}, data=info)
+    assert result["step_id"] == "discovery_confirm"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {CONF_HOST: "scope.test", "mode": "direct"}
+
+
+async def test_other_gear_in_the_mac_range_is_ignored(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json={"hello": "a light bulb"})
+    info = DhcpServiceInfo(ip="scope.test", hostname="bulb", macaddress="9cb8b4000001")
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "dhcp"}, data=info)
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "not_a_scope")
+
+
+async def test_discovery_stays_quiet_once_something_is_set_up(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
+
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    await setup_direct(hass, monkeypatch)
+    info = DhcpServiceInfo(ip="scope.test", hostname="dwarf", macaddress="9cb8b457d0ec")
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "dhcp"}, data=info)
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
+
+
+async def test_switching_from_read_only_to_the_relay_keeps_entity_ids(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch, local_ip
+):
+    from homeassistant.helpers import entity_registry as er
+
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    registry = er.async_get(hass)
+    shared = ["sensor.dwarf_3_sd_card_free", "sensor.dwarf_3_sd_card_used", "sensor.dwarf_3_capture_sessions",
+              "binary_sensor.dwarf_3_connectivity"]
+    before = {e: registry.async_get(e).unique_id for e in shared}
+    assert hass.states.get("sensor.dwarf_3_battery") is None
+
+    local_ip("relay.test")
+    mock_relay(aioclient_mock)
+    result = await entry.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "reconfigure_successful")
+    await hass.async_block_till_done()
+
+    entry = hass.config_entries.async_get_entry(entry.entry_id)
+    assert entry.state is ConfigEntryState.LOADED and entry.data["mode"] == "relay"
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1, "the same entry, not a second one"
+    assert {e: registry.async_get(e).unique_id for e in shared} == before, "same entities"
+    assert hass.states.get("sensor.dwarf_3_battery").state == "87", "and the relay's extras arrive"
+    assert hass.states.get("sensor.dwarf_3_capture_sessions").state == "3", "now read through the relay"
+
+
+async def test_switching_back_to_read_only_keeps_entity_ids(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch
+):
+    from homeassistant.helpers import entity_registry as er
+
+    from custom_components.dwarf3.direct import ScopeDirectClient
+
+    mock_relay(aioclient_mock)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    monkeypatch.setattr(ScopeDirectClient, "list_sessions_blocking", lambda self: SESSIONS)
+    entry = await setup(hass)
+    registry = er.async_get(hass)
+    before = registry.async_get("sensor.dwarf_3_sd_card_free").unique_id
+
+    result = await entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "direct"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+
+    entry = hass.config_entries.async_get_entry(entry.entry_id)
+    assert entry.state is ConfigEntryState.LOADED and entry.data["mode"] == "direct"
+    assert registry.async_get("sensor.dwarf_3_sd_card_free").unique_id == before
+    assert hass.states.get("sensor.dwarf_3_sd_card_free").state == "31.0"
+
+
+async def test_changing_the_scope_address(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    aioclient_mock.post("http://new.test:8082/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    result = await entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "direct"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "new.test"})
+    assert result["reason"] == "reconfigure_successful"
+    assert hass.config_entries.async_get_entry(entry.entry_id).data[CONF_HOST] == "new.test"

@@ -1,91 +1,82 @@
 # DWARF 3 for Home Assistant
 
-Status, control, and a wide-camera snapshot for a DWARF 3 smart telescope, through the
-[dwarf3 relay](https://github.com/bscholer/dwarf3-control).
+See your DWARF 3 in Home Assistant: SD card, capture progress, battery, temperatures, a camera, and controls for
+automations. Start read-only in a minute, and add full control later if you want it.
 
-This repo holds two things:
+## Get started
 
-- `custom_components/dwarf3/`, the integration. Install it from the Home Assistant marketplace (add this repo as a custom repository, category Integration).
-- `dwarf3_relay/`, an app that runs the relay. Add this repo's URL as a repository in the Home Assistant app store.
-  On a Home Assistant install without apps, run the relay image yourself (`ghcr.io/bscholer/dwarf3-control`, host network)
-  and skip the app.
+1. Install **DWARF 3 Smart Telescope** from the Home Assistant marketplace and restart Home Assistant.
+2. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**. If not,
+   choose **Add integration → DWARF 3**.
+3. Pick **Read-only** and enter the scope's IP address (look in your router's list of devices).
 
-The integration talks to the relay over its HTTP API and shares no code with it. It reads `/api/capabilities` and refuses a
-relay whose spec major version it does not know.
+That's it. Read-only never touches the scope's one control connection, so the DWARFLAB app keeps working as normal.
 
-## Two ways to connect
+## Want more? Full control
 
-When you add the integration you choose one.
+Battery, temperatures, the camera, and buttons like **Prepare** and **Close barrel** need a small helper called the
+relay, because the scope only shares those with whatever holds its one control connection. It takes about two minutes:
 
-**Read-only, straight from the scope.** Nothing to install. You give the integration the scope's IP address and it reads what the
-scope gives out over plain HTTP and FTP: whether it is reachable, the SD card free, used and size (size only if the scope reports it),
-and the capture sessions. It never takes the scope's one control connection, so the DWARFLAB app keeps working. It cannot show battery,
-temperatures or state, and it has no camera or controls, because the scope only sends those to the client that holds the control connection.
+1. Add this repository to the Home Assistant app store, install the **DWARF 3 relay** app, enter your scope's IP address,
+   and press **Start**.
+2. Open the DWARF 3 integration, press **⋮ → Reconfigure**, and choose **Full control**. It finds the relay by itself.
+3. In the DWARFLAB app, enter your Home Assistant's IP address as the scope.
 
-**Full control, through the relay.** The relay holds that one connection and lets the DWARFLAB app, Home Assistant, and tools such as
-astrolab share it. It gives everything below. The relay must be on the scope's Wi-Fi network and reachable from Home Assistant.
+Your entities and dashboards stay exactly as they were. You only gain more of them.
 
-Pick one for each scope. Adding both just gives you two devices with the same SD card and session sensors.
+| | Read-only | Full control |
+|---|:-:|:-:|
+| Scope online, SD card free and used | ✔ | ✔ |
+| Capture sessions on the card | ✔ | ✔ |
+| Works with the DWARFLAB app | ✔ | ✔ (through the relay) |
+| Battery, temperatures, tracking | | ✔ |
+| Capture progress, "capture finished" event | | ✔ |
+| Wide camera | | ✔ |
+| Buttons and services (goto, capture, darks, move, point) | | ✔ |
 
-## Setup, full control
+Without Home Assistant apps (Container or Core installs), run the relay yourself:
+`docker run -d --network host -e DWARF3_HOST=<scope ip> -e DWARF3_AUTH=off -v dwarf3:/data ghcr.io/bscholer/dwarf3-control`,
+then choose **Full control** and enter that machine's address.
 
-1. Install and start the app, with `scope_host` set to the scope's IP. Read the API token in the app log, or set your own.
-2. Enter the Home Assistant host's IP in the DWARFLAB app as the scope.
-3. Add the **DWARF 3 Smart Telescope** integration, choose **Full control**, and give it the host, port 9902, and the token.
+## If something looks wrong
 
-## Entities (full control)
-
-| Kind | Entities |
+| You see | Try |
 |---|---|
-| Sensor | Capture state (idle, running, done, failed), capture progress, frames captured, battery, body temperature, SD card free and used, capture sessions |
-| Sensor, diagnostic | Frames failed, tele and wide sensor temperature, tele and wide dark counts, relay version, SD card size, pitch and rotation, goto and calibration state codes (the last four are off by default) |
-| Binary sensor | Tracking, scope reachable, DWARFLAB app connected, capturing from another client |
-| Event | Capture finished (`capture_done` or `capture_failed`, with the frame counts and session) |
-| Button | Close barrel, stop capture, prepare, calibrate |
-| Camera | Wide camera snapshot |
+| "Nothing answered" when adding | The scope must be awake, on your Wi-Fi, and the address must be right. |
+| The scope's address changed | **⋮ → Reconfigure** and enter the new one. A fixed address in your router avoids this. |
+| Wide camera is blank | Press **Prepare** first. The scope only streams video after that. |
+| Calibrate fails | It needs a dark sky with stars, so it fails in daylight. |
+| Battery shows "unknown" | It appears about a minute after the scope connects to the relay. |
+| The DWARFLAB app can't find the scope | With the relay, enter your Home Assistant's IP address in the app, not the scope's. |
 
-Capture state carries `frames`, `captured`, `failed`, `session`, and `error` as attributes. Tracking, SD card size, and the state
-codes need relay 0.3.0 or later and read as unknown on an older relay. The goto and calibration codes are shown as the scope sends
-them, and what each number means is not confirmed yet. Capture sessions is read every 10 minutes, because it reads the scope's album.
+Something else? **⋮ → Download diagnostics** on the device, then open an issue. Diagnostics hide your address and never
+include what the scope reports about your Wi-Fi.
 
-## Services
+## Entities
+
+- **Read-only:** scope online, SD card free, used and size, capture sessions.
+- **Full control adds:** capture state (idle, running, done, failed), capture progress, frames captured and failed, battery, body
+  and sensor temperatures, tracking, dark counts, relay version, **Capture finished** event, wide camera, and buttons for
+  Prepare, Calibrate, Close barrel and Stop capture.
+
+## Services (full control)
 
 All take a DWARF 3 device as the target.
 
 - `dwarf3.goto`: `name`, `ra_hours`, `dec_degrees` (J2000). The relay refuses a target within 30 degrees of the Sun.
 - `dwarf3.start_capture`: `frames`, `exposure` (15, 30, 60), `gain`, `filter` (vis, astro, duo).
 - `dwarf3.start_dark`: `frames`, `exposure`, `wide`. Close the barrel first.
-- `dwarf3.move`: `angle`, `length` (0 to 1), `seconds` (up to 5). The joystick.
+- `dwarf3.move`: `angle`, `length` (0 to 1), `seconds` (up to 5).
 - `dwarf3.point`: `pitch` (0 to 175, 172.5 is straight up) and optional `rotation`.
-- `dwarf3.delete_session`: `session`. Deletes a capture session from the SD card. It cannot be undone and is refused while a capture runs.
+- `dwarf3.delete_session`: `session`. Cannot be undone, and is refused while a capture runs.
 
-## Auth
+## Notes
 
-The relay requires a bearer token for everything but status. If the token is wrong the integration starts a reauth flow.
-With `auth` off on the relay, leave the token empty.
-
-## Limits
-
-- Status is polled (30 s by default, set in the integration options). The relay has no event stream yet.
-- Only one controller at a time works. Starting a capture from Home Assistant while another client holds the scope
-  returns an error, and the *capturing from another client* sensor turns on.
-- The scope only streams video after **Prepare**, so the wide camera has no image before that. Frames can take 20 s or more, so the
-  camera shows the last frame while a new one loads.
-- **Calibrate** needs a dark sky with stars. In daylight it fails with a focus or plate-solve error from the scope.
-- The tele camera is not offered. A tele frame waits for a keyframe and can take over a minute.
-- The `prepare` button needs `latitude`, `longitude` and `timezone` in the app options. Nothing is guessed.
-
-## Brand images
-
-`custom_components/dwarf3/brand/` holds the icon and logo, which Home Assistant 2026.3 and later shows without anything in the
-brands repository. They are derived from the DWARFLAB logo and belong to DWARFLAB. The MIT license covers the code, not those images.
-This project is not affiliated with DWARFLAB.
-
-## License
+- Anyone on your home network can control the scope through the relay, as they can without it. The relay app has an option to
+  require an access token if you share your network.
+- The relay's status refreshes every 30 s (read-only: 60 s). Change it under **Configure**.
+- The tele camera is not offered: a frame can take over a minute.
+- The brand images in `custom_components/dwarf3/brand/` belong to DWARFLAB, and this project is not affiliated with them.
+  The MIT license covers the code.
 
 MIT, see `LICENSE`.
-
-## Diagnostics
-
-Download diagnostics from the device page. In read-only mode it lists the names of the fields the scope returns, never their values,
-because the scope's `deviceInfo` reply includes the home Wi-Fi password in clear text. The integration reads only the SD card figures.

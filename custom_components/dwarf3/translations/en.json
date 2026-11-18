@@ -1,50 +1,66 @@
 {
   "config": {
     "step": {
-      "reauth_confirm": {
-        "title": "The relay refused the token",
-        "data": {
-          "token": "API token"
-        }
-      },
-      "relay": {
-        "title": "Connect to the DWARF 3 relay",
-        "description": "The relay runs on your network and holds the connection to the scope. Install the app, or run the relay image yourself.",
-        "data": {
-          "host": "Relay host",
-          "port": "Port",
-          "token": "API token"
-        },
-        "data_description": {
-          "token": "Needed for control. Leave empty only if the relay runs with auth off."
-        }
-      },
       "user": {
-        "title": "How do you want to connect?",
-        "description": "Read-only reads the scope directly and never takes its one control connection, so the DWARFLAB app keeps working. Full control goes through the relay, which also gives battery, temperatures, the camera, and controls.",
+        "title": "Add your DWARF 3",
+        "description": "Start with read-only. You can switch to full control later without losing your dashboards.",
         "menu_options": {
-          "direct": "Read-only, straight from the scope",
-          "relay": "Full control, through the relay"
+          "direct": "Read-only: no setup, works alongside the DWARFLAB app",
+          "relay": "Full control: battery, camera and controls (needs the relay app)"
         }
       },
       "direct": {
-        "title": "Connect to the scope",
-        "description": "Gives the SD card and capture sessions. Battery, temperatures, the camera, and controls need the relay. Give the scope a fixed IP address in your router.",
+        "title": "Your scope",
+        "description": "Enter the scope's IP address. You can find it in your router's list of devices.",
         "data": {
           "host": "Scope IP address"
+        }
+      },
+      "discovery_confirm": {
+        "title": "DWARF 3 found",
+        "description": "Found your scope at {host}. Add it in read-only mode?"
+      },
+      "relay": {
+        "title": "Connect the relay",
+        "description": "No relay found on this Home Assistant yet. Install the **DWARF 3 relay** app, set its **Telescope IP address** to {scope}, start it, then press Submit.",
+        "data": {
+          "host": "Relay address",
+          "port": "Port",
+          "token": "Access token (only if you turned one on)"
+        }
+      },
+      "relay_found": {
+        "title": "Relay found",
+        "description": "The relay is running on this Home Assistant ({host}). Add it?"
+      },
+      "reconfigure": {
+        "title": "Change how it connects",
+        "description": "Currently {current}. Your entities and dashboards stay the same when you switch.",
+        "menu_options": {
+          "direct": "Read-only, or change the scope's address",
+          "relay": "Full control, or change the relay's address"
+        }
+      },
+      "reauth_confirm": {
+        "title": "The relay wants a token",
+        "description": "Paste the access token from the relay app's settings.",
+        "data": {
+          "token": "Access token"
         }
       }
     },
     "error": {
-      "cannot_connect": "The relay did not answer. Check the host and port.",
-      "invalid_auth": "The relay refused the token.",
-      "unsupported_version": "This relay speaks a version of the API this integration does not support.",
-      "unknown": "The relay gave an unexpected answer.",
-      "not_a_scope": "That address answered, but it does not look like a DWARF 3."
+      "cannot_connect": "Nothing answered at that address. Is the scope awake and on your Wi-Fi?",
+      "not_a_scope": "That answered, but it doesn't look like a DWARF 3.",
+      "invalid_auth": "The relay wants an access token.",
+      "unsupported_version": "This relay is too old or too new for this integration. Update both.",
+      "unknown": "Something unexpected came back. Try again."
     },
     "abort": {
-      "already_configured": "This relay is already set up.",
-      "reauth_successful": "Token updated."
+      "already_configured": "This one is already added.",
+      "not_a_scope": "That device is not a DWARF 3.",
+      "reauth_successful": "Token updated.",
+      "reconfigure_successful": "Done. Your entities are unchanged."
     }
   },
   "options": {
