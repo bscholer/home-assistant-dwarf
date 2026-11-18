@@ -1,5 +1,5 @@
 name: DWARF 3 relay
-version: "0.1.0"
+version: "0.2.0"
 slug: dwarf3_relay
 description: Shares one connection to a DWARF 3 telescope between the DWARFLAB app, Home Assistant, and other tools.
 url: https://github.com/bscholer/home-assistant-dwarf3

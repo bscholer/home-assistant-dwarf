@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Connect to the DWARF 3 relay",
-        "description": "The relay runs on your network and holds the connection to the scope. Install the add-on, or run the relay image yourself.",
+        "description": "The relay runs on your network and holds the connection to the scope. Install the app, or run the relay image yourself.",
         "data": {
           "host": "Relay host",
           "port": "Port",

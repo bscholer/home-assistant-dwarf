@@ -5,10 +5,10 @@ Status, control, and a wide-camera snapshot for a DWARF 3 smart telescope, throu
 
 This repo holds two things:
 
-- `custom_components/dwarf3/`, the integration. Install it with HACS (custom repository, category Integration).
-- `dwarf3_relay/`, an add-on that runs the relay. Add this repo's URL under **Settings → Add-ons → Add-on Store → Repositories**.
-  On a Home Assistant install without add-ons, run the relay image yourself (`ghcr.io/bscholer/dwarf3-control`, host network)
-  and skip the add-on.
+- `custom_components/dwarf3/`, the integration. Install it from the Home Assistant marketplace (add this repo as a custom repository, category Integration).
+- `dwarf3_relay/`, an app that runs the relay. Add this repo's URL as a repository in the Home Assistant app store.
+  On a Home Assistant install without apps, run the relay image yourself (`ghcr.io/bscholer/dwarf3-control`, host network)
+  and skip the app.
 
 The integration talks to the relay over its HTTP API and shares no code with it. It reads `/api/capabilities` and refuses a
 relay whose spec major version it does not know.
@@ -20,7 +20,7 @@ such as astrolab share it. The relay must be on the scope's Wi-Fi network and re
 
 ## Setup
 
-1. Install and start the add-on, with `scope_host` set to the scope's IP. Read the API token in the add-on log, or set your own.
+1. Install and start the app, with `scope_host` set to the scope's IP. Read the API token in the app log, or set your own.
 2. Enter the Home Assistant host's IP in the DWARFLAB app as the scope.
 3. Add the **DWARF 3 Smart Telescope** integration with the host, port 9902, and the token.
 
@@ -54,7 +54,7 @@ With `auth` off on the relay, leave the token empty.
 - Only one controller at a time works. Starting a capture from Home Assistant while another client holds the scope
   returns an error, and the *capturing from another client* sensor turns on.
 - The tele camera is not offered. A tele frame waits for a keyframe and can take over a minute.
-- The `prepare` button needs `latitude`, `longitude` and `timezone` in the add-on options. Nothing is guessed.
+- The `prepare` button needs `latitude`, `longitude` and `timezone` in the app options. Nothing is guessed.
 
 ## Brand images
 
