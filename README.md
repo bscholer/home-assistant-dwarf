@@ -53,6 +53,9 @@ With `auth` off on the relay, leave the token empty.
 - Status is polled (30 s by default, set in the integration options). The relay has no event stream yet.
 - Only one controller at a time works. Starting a capture from Home Assistant while another client holds the scope
   returns an error, and the *capturing from another client* sensor turns on.
+- The scope only streams video after **Prepare**, so the wide camera has no image before that. Frames can take 20 s or more, so the
+  camera shows the last frame while a new one loads.
+- **Calibrate** needs a dark sky with stars. In daylight it fails with a focus or plate-solve error from the scope.
 - The tele camera is not offered. A tele frame waits for a keyframe and can take over a minute.
 - The `prepare` button needs `latitude`, `longitude` and `timezone` in the app options. Nothing is guessed.
 

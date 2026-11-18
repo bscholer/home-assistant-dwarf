@@ -157,3 +157,36 @@ async def test_plain_text_error_from_the_relay_is_reported(hass: HomeAssistant, 
     await setup(hass)
     with pytest.raises(HomeAssistantError, match="Internal Server Error"):
         await hass.services.async_call("button", "press", {"entity_id": "button.dwarf_3_prepare"}, blocking=True)
+
+
+async def test_camera_keeps_the_last_frame(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    import base64
+
+    from homeassistant.components.camera import async_get_image
+
+    mock_relay(aioclient_mock)
+    aioclient_mock.get(f"{BASE}/api/frame", json={"data": base64.b64encode(b"first").decode()})
+    await setup(hass)
+    assert (await async_get_image(hass, "camera.dwarf_3_wide_camera")).content == b"first"
+    frames = [c for c in aioclient_mock.mock_calls if c[1].path == "/api/frame"]
+    assert (await async_get_image(hass, "camera.dwarf_3_wide_camera")).content == b"first"
+    assert len([c for c in aioclient_mock.mock_calls if c[1].path == "/api/frame"]) == len(frames), "fresh: no refetch"
+
+    camera = hass.data["camera"].get_entity("camera.dwarf_3_wide_camera")
+    camera._image_time -= 100
+    aioclient_mock.clear_requests()
+    mock_relay(aioclient_mock)
+    aioclient_mock.get(f"{BASE}/api/frame", json={"detail": "no frame", "code": "busy"}, status=409)
+    assert (await async_get_image(hass, "camera.dwarf_3_wide_camera")).content == b"first", "stale beats an error"
+
+
+async def test_camera_error_names_the_prepare_step(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    import pytest
+    from homeassistant.components.camera import async_get_image
+    from homeassistant.exceptions import HomeAssistantError
+
+    mock_relay(aioclient_mock)
+    aioclient_mock.get(f"{BASE}/api/frame", json={"detail": "Connection refused", "code": "busy"}, status=409)
+    await setup(hass)
+    with pytest.raises(HomeAssistantError, match="Prepare"):
+        await async_get_image(hass, "camera.dwarf_3_wide_camera")
