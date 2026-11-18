@@ -25,8 +25,7 @@ temperatures or state, and it has no camera or controls, because the scope only 
 **Full control, through the relay.** The relay holds that one connection and lets the DWARFLAB app, Home Assistant, and tools such as
 astrolab share it. It gives everything below. The relay must be on the scope's Wi-Fi network and reachable from Home Assistant.
 
-You can add both. Only the relay mode gives the app a place to share the connection, so do not run the relay and read-only mode
-expecting the app to see Home Assistant's stats: the relay's entities are the ones that carry battery and the rest.
+Pick one for each scope. Adding both just gives you two devices with the same SD card and session sensors.
 
 ## Setup, full control
 
