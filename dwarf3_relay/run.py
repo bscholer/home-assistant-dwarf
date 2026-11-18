@@ -1,4 +1,4 @@
-"""Read the add-on options and start the relay. Home Assistant puts them in /data/options.json."""
+"""Read the app options and start the relay. Home Assistant puts them in /data/options.json."""
 
 import json
 import os
@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 options = json.loads(Path("/data/options.json").read_text())
 host = (options.get("scope_host") or "").strip()
 if not host:
-    sys.exit("Set scope_host to the scope's IP address in the add-on configuration.")
+    sys.exit("Set scope_host to the scope's IP address in the app configuration.")
 
 env = os.environ
 env["DWARF3_HOST"] = host
