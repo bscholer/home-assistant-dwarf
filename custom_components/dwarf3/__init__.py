@@ -9,6 +9,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import RelayClient, RelayError, RelayUnreachable
+from .card import async_remove_card, async_setup_card
 from .const import CONF_MODE, CONF_TOKEN, DOMAIN, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator, Dwarf3DirectCoordinator
 from .direct import ScopeDirectClient
@@ -26,6 +27,7 @@ DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.CAMERA, Platform.IMAGE, Pla
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async_setup_services(hass)
     hass.http.register_view(StackView())
+    await async_setup_card(hass)
     return True
 
 
@@ -81,3 +83,8 @@ async def _reload(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bool:
     return await hass.config_entries.async_unload_platforms(entry, entry.runtime_data.platforms)
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> None:
+    if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
+        await async_remove_card(hass)

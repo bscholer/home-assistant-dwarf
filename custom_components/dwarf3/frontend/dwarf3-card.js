@@ -7,7 +7,7 @@
  * The card finds its entities through the entity registry (translation keys), so renamed entities keep working.
  */
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const DOMAIN = "dwarf3";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
@@ -228,6 +228,10 @@ class Dwarf3Card extends HTMLElement {
 
   static getStubConfig() {
     return {};
+  }
+
+  static getConfigElement() {
+    return document.createElement("dwarf3-card-editor");
   }
 
   setConfig(config) {
@@ -1556,9 +1560,43 @@ i.live.rec { background: var(--d-bad); }
 @keyframes pulse { 50% { opacity: .55; } }
 `;
 
-customElements.define("dwarf3-card", Dwarf3Card);
+// Picks the scope in the card editor. With one DWARF 3 there is nothing to pick: the card finds it.
+class Dwarf3CardEditor extends HTMLElement {
+  setConfig(config) {
+    this._config = config || {};
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  _render() {
+    if (!this._hass || !this._config) return;
+    if (!this._form) {
+      this._form = document.createElement("ha-form");
+      this._form.schema = [{ name: "device_id", selector: { device: { integration: DOMAIN } } }];
+      this._form.computeLabel = () => "DWARF 3 (leave empty to use the first one)";
+      this._form.addEventListener("value-changed", (ev) => {
+        const config = { ...this._config, ...ev.detail.value };
+        if (!config.device_id) delete config.device_id;
+        this._config = config;
+        this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+      });
+      this.appendChild(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.data = this._config;
+  }
+}
+
+if (!customElements.get("dwarf3-card")) {
+  customElements.define("dwarf3-card", Dwarf3Card);
+  customElements.define("dwarf3-card-editor", Dwarf3CardEditor);
+}
 window.customCards = window.customCards || [];
-window.customCards.push({
+if (!window.customCards.some((c) => c.type === "dwarf3-card")) window.customCards.push({
   type: "dwarf3-card",
   name: "DWARF 3",
   description: "Live view, joystick, capture, goto and gallery for a DWARF 3 smart telescope.",
