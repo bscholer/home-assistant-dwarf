@@ -20,11 +20,30 @@ class Dwarf3ButtonDescription(ButtonEntityDescription):
     press: Callable[[RelayClient], Awaitable[None]]
 
 
+POINT_UP_PITCH = 172.5  # straight up on a level tripod, as the relay's Prepare sets it
+NUDGE_LENGTH = 0.3
+NUDGE_SECONDS = 1.0
+
 BUTTONS: tuple[Dwarf3ButtonDescription, ...] = (
     Dwarf3ButtonDescription(key="close_barrel", translation_key="close_barrel", press=lambda c: c.close_barrel()),
     Dwarf3ButtonDescription(key="stop_capture", translation_key="stop_capture", press=lambda c: c.stop_capture()),
     Dwarf3ButtonDescription(key="prepare", translation_key="prepare", press=lambda c: c.prepare()),
     Dwarf3ButtonDescription(key="calibrate", translation_key="calibrate", press=lambda c: c.calibrate()),
+    # The preset every setup needs: straight up. Parking is Close barrel.
+    Dwarf3ButtonDescription(
+        key="point_up", translation_key="point_up", press=lambda c: c.point(POINT_UP_PITCH, None)
+    ),
+    # Short joystick moves, like the left/right/up/down buttons of a PTZ camera. Measured on a DWARF 3, one second
+    # at this strength turns about 9 degrees: angle 0 lowers rotation, 90 raises pitch, 180 raises rotation,
+    # and 270 lowers pitch.
+    *(
+        Dwarf3ButtonDescription(
+            key=f"nudge_{name}",
+            translation_key=f"nudge_{name}",
+            press=lambda c, a=angle: c.move(a, NUDGE_LENGTH, NUDGE_SECONDS),
+        )
+        for name, angle in (("right", 0), ("up", 90), ("left", 180), ("down", 270))
+    ),
 )
 
 

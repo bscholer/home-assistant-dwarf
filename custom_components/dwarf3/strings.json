@@ -194,6 +194,21 @@
       },
       "calibrate": {
         "name": "Calibrate"
+      },
+      "point_up": {
+        "name": "Point straight up"
+      },
+      "nudge_right": {
+        "name": "Nudge right"
+      },
+      "nudge_up": {
+        "name": "Nudge up"
+      },
+      "nudge_left": {
+        "name": "Nudge left"
+      },
+      "nudge_down": {
+        "name": "Nudge down"
       }
     },
     "camera": {

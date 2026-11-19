@@ -65,6 +65,16 @@ include what the scope reports about your Wi-Fi.
 - **Full control adds:** capture state (idle, running, done, failed), capture progress, frames captured and failed, battery, body
   and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide camera, and buttons for
   Prepare, Calibrate, Close barrel and Stop capture.
+- **Pitch and rotation** sensors, in degrees, like a PTZ camera's pan and tilt position. They are the scope's motor angles,
+  not altitude and azimuth, because the mount is tilted. Pitch 172.5 is straight up and 0 is the closed barrel.
+- **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5.
+  Close barrel is the park position. There are no pitch or rotation sliders, on purpose: they would be too easy to hit by
+  accident. For an exact position use `dwarf3.point`.
+- **Pitch and rotation** sensors, in degrees, like a PTZ camera's pan and tilt position. They are the scope's motor angles,
+  not altitude and azimuth, because the mount is tilted. 172.5 pitch is straight up and 0 is the closed barrel.
+- **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5.
+  Close barrel is the park position. There are no pitch or rotation sliders, on purpose: they would be too easy to hit by
+  accident. For exact positions use `dwarf3.point`.
 
 ## Services (full control)
 

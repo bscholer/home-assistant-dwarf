@@ -12,7 +12,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTemperature
+from homeassistant.const import DEGREE, PERCENTAGE, EntityCategory, UnitOfInformation, UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
@@ -178,15 +178,17 @@ SENSORS: tuple[Dwarf3SensorDescription, ...] = (
     Dwarf3SensorDescription(
         key="pitch",
         translation_key="pitch",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        native_unit_of_measurement=DEGREE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         value=lambda d: d.get("pitch"),
     ),
     Dwarf3SensorDescription(
         key="rotation",
         translation_key="rotation",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        native_unit_of_measurement=DEGREE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
         value=lambda d: d.get("rotation"),
     ),
 )

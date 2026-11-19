@@ -1,3 +1,4 @@
+import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
@@ -854,3 +855,42 @@ async def test_read_only_mode_has_no_prepare_hint(hass: HomeAssistant, aioclient
     aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
     await setup_direct(hass, monkeypatch)
     assert hass.states.get("binary_sensor.dwarf_3_needs_prepare") is None
+
+
+# ---- pan/tilt-style controls
+
+async def test_pitch_and_rotation_are_shown_in_degrees_by_default(hass: HomeAssistant, aioclient_mock):
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    pitch = hass.states.get("sensor.dwarf_3_pitch")
+    assert (pitch.state, pitch.attributes["unit_of_measurement"]) == ("172.5", "°")
+    assert hass.states.get("sensor.dwarf_3_rotation").state == "10.0"
+
+
+@pytest.mark.parametrize(
+    ("button", "angle"),
+    [("nudge_right", 0), ("nudge_up", 90), ("nudge_left", 180), ("nudge_down", 270)],
+)
+async def test_nudge_buttons_send_a_short_joystick_move(hass: HomeAssistant, aioclient_mock, button, angle):
+    aioclient_mock.post(f"{BASE}/api/move", json={"message": "moved"})  # first, so it wins over mock_relay's own
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    await hass.services.async_call("button", "press", {"entity_id": f"button.dwarf_3_{button}"}, blocking=True)
+    moves = [c[2] for c in aioclient_mock.mock_calls if c[0] == "POST" and c[1].path == "/api/move"]
+    sent = [m for m in moves if m.get("length")]  # not the token check, which sends length 0
+    assert sent[-1] == {"angle": angle, "length": 0.3, "seconds": 1.0}
+
+
+async def test_point_straight_up_sets_the_pitch_only(hass: HomeAssistant, aioclient_mock):
+    aioclient_mock.post(f"{BASE}/api/point", json={"message": "pointed"})
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    await hass.services.async_call("button", "press", {"entity_id": "button.dwarf_3_point_straight_up"}, blocking=True)
+    sent = [c[2] for c in aioclient_mock.mock_calls if c[0] == "POST" and c[1].path == "/api/point"]
+    assert sent == [{"pitch": 172.5, "rotation": None}]
+
+
+async def test_there_are_no_pitch_or_rotation_sliders(hass: HomeAssistant, aioclient_mock):
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    assert not hass.states.async_entity_ids("number"), "a slider that moves motors is too easy to hit by accident"
