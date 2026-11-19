@@ -117,16 +117,35 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_discovery_confirm()
 
     async def async_step_discovery_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """A scope was found. Offer read-only, or full control, which sets up the relay right from here."""
         assert self._scope_host
-        if user_input is not None:
-            return await self._finish(
-                data={CONF_HOST: self._scope_host, CONF_MODE: MODE_DIRECT},
-                unique_id=f"direct:{self._scope_host}",
-                title="DWARF 3",
-            )
         self.context["title_placeholders"] = {"host": self._scope_host}
-        self._set_confirm_only()
-        return self.async_show_form(step_id="discovery_confirm", description_placeholders={"host": self._scope_host})
+        return self.async_show_menu(
+            step_id="discovery_confirm",
+            menu_options=["discovery_readonly", "discovery_full"],
+            description_placeholders={"host": self._scope_host},
+        )
+
+    async def async_step_discovery_readonly(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        assert self._scope_host
+        return await self._finish(
+            data={CONF_HOST: self._scope_host, CONF_MODE: MODE_DIRECT},
+            unique_id=f"direct:{self._scope_host}",
+            title="DWARF 3",
+        )
+
+    async def async_step_discovery_full(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """They picked full control, and we know the scope's address, so there is nothing left to ask.
+
+        Use a relay already on this Home Assistant, else install one, else (no Supervisor) ask for its address.
+        """
+        local = await self._local_ip()
+        if local and await self._check(local, DEFAULT_PORT, None) is None:
+            self._relay = {CONF_HOST: local, CONF_PORT: DEFAULT_PORT, CONF_TOKEN: None, CONF_MODE: MODE_RELAY}
+            return await self.async_step_relay_ready()
+        if local and app_setup.has_supervisor(self.hass):
+            return await self.async_step_relay_install()
+        return await self.async_step_relay_manual()
 
     async def async_step_direct(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Read-only, straight from the scope. It never touches the scope's one control connection."""

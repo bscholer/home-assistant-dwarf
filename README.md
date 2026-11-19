@@ -6,7 +6,7 @@ automations. Start read-only in a minute, and add full control later if you want
 ## Get started
 
 1. Install **DWARF 3 Smart Telescope** from the Home Assistant marketplace and restart Home Assistant.
-2. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**. If not,
+2. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**: pick read-only, or full control to have the relay set up for you. If not,
    choose **Add integration → DWARF 3**.
 3. Pick **Read-only** and enter the scope's IP address (look in your router's list of devices).
 

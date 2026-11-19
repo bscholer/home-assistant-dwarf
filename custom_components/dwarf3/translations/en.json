@@ -18,7 +18,11 @@
       },
       "discovery_confirm": {
         "title": "DWARF 3 found",
-        "description": "Found your scope at {host}. Add it in read-only mode?"
+        "description": "Found your scope at {host}.",
+        "menu_options": {
+          "discovery_readonly": "Add it read-only: nothing to install",
+          "discovery_full": "Add it with full control: sets up the relay app for you"
+        }
       },
       "relay": {
         "title": "Set up the relay",

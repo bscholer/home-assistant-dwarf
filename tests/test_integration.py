@@ -451,16 +451,66 @@ async def test_relay_that_wants_a_token_asks_for_it(hass: HomeAssistant, aioclie
     assert result["step_id"] == "relay_manual", "falls back to the form, which has a token field"
 
 
-async def test_a_scope_found_on_the_network_is_offered(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+async def _discovered(hass, aioclient_mock):
     from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
     aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
     info = DhcpServiceInfo(ip="scope.test", hostname="dwarf", macaddress="9cb8b457d0ec")
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "dhcp"}, data=info)
-    assert result["step_id"] == "discovery_confirm"
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.MENU and result["step_id"] == "discovery_confirm"
+    assert result["description_placeholders"] == {"host": "scope.test"}
+    assert set(result["menu_options"]) == {"discovery_readonly", "discovery_full"}
+    return result
+
+
+async def test_a_scope_found_on_the_network_can_be_added_read_only(hass: HomeAssistant, aioclient_mock):
+    result = await _discovered(hass, aioclient_mock)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "discovery_readonly"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"] == {CONF_HOST: "scope.test", "mode": "direct"}
+
+
+async def test_a_found_scope_can_go_straight_to_full_control_with_the_relay_installed(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    fake = supervisor()
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    result = await _discovered(hass, aioclient_mock)
+
+    def app_comes_up():
+        aioclient_mock.clear_requests()
+        mock_relay(aioclient_mock)
+
+    fake.on_start = app_comes_up
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "discovery_full"})
+    result = await _finish_progress(hass, result)
+    assert result["type"] is FlowResultType.CREATE_ENTRY, "no questions: the scope's address is already known"
+    assert result["data"] == {CONF_HOST: "relay.test", CONF_PORT: 9902, CONF_TOKEN: None, "mode": "relay"}
+    config = [c for c in fake.calls if c[0] == "set_addon_options"][0][2]["config"]
+    assert config["scope_host"] == "scope.test"
+
+
+async def test_a_found_scope_uses_a_relay_that_is_already_running(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
+):
+    fake = supervisor()
+    local_ip("relay.test")
+    mock_relay(aioclient_mock)
+    result = await _discovered(hass, aioclient_mock)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "discovery_full"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY and result["data"]["mode"] == "relay"
+    assert fake.calls == [], "nothing to install"
+
+
+async def test_full_control_without_a_supervisor_asks_for_the_relays_address(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip
+):
+    local_ip("relay.test")
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
+    result = await _discovered(hass, aioclient_mock)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "discovery_full"})
+    assert result["type"] is FlowResultType.FORM and result["step_id"] == "relay_manual"
 
 
 async def test_other_gear_in_the_mac_range_is_ignored(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):

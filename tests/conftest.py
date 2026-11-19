@@ -43,6 +43,7 @@ class FakeSupervisor:
         self.options = dict(options or {"scope_host": "", "auth": False})
         self.state = AddonState(state)
         self.calls: list[tuple] = []
+        self.on_start = None
 
         def record(name, result=None, error=None):
             async def call(*args, **kwargs):
@@ -73,6 +74,8 @@ class FakeSupervisor:
 
         async def start(slug):
             self.calls.append(("start_addon", (slug,), {}))
+            if self.on_start:
+                self.on_start()  # the app "comes up": the test makes the relay answer
 
         repo_objects = [SimpleNamespace(source=r) for r in repos]
         self.store = SimpleNamespace(
