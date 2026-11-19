@@ -8,7 +8,7 @@
  * The card finds its entities through the entity registry (translation keys), so renamed entities keep working.
  */
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.3";
 const DOMAIN = "dwarf3";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
@@ -67,6 +67,7 @@ const FILTERS = [
 const FRAME_PRESETS = [20, 50, 100, 200, 500];
 
 // J2000. ra in hours, dec in degrees. Names match how the scope labels sessions ("M 81", "NGC 1499").
+// Checked against OpenNGC: all within 15 arcmin, except two aimed on purpose to frame the whole target.
 const CATALOG = [
   ["M 31", "Andromeda Galaxy", "galaxy", 0.7123, 41.2692, 3.4, "NGC 224"],
   ["M 33", "Triangulum Galaxy", "galaxy", 1.5641, 30.6602, 5.7, "NGC 598"],
@@ -101,6 +102,7 @@ const CATALOG = [
   ["NGC 6888", "Crescent Nebula", "nebula", 20.2019, 38.355, 7.4, ""],
   ["NGC 1499", "California Nebula", "nebula", 4.055, 36.4217, 6.0, ""],
   ["IC 434", "Horsehead Nebula", "nebula", 5.6831, -2.4583, 6.8, "Barnard 33"],
+  // The centre of the ring, on the NGC 2244 cluster. OpenNGC puts NGC 2237 on the western lobe.
   ["NGC 2237", "Rosette Nebula", "nebula", 6.5625, 4.9983, 5.5, "NGC 2238 NGC 2244"],
   ["NGC 2264", "Cone Nebula", "nebula", 6.685, 9.8833, 3.9, "Christmas Tree"],
   ["IC 405", "Flaming Star Nebula", "nebula", 5.2681, 34.45, 6.0, ""],
@@ -125,6 +127,7 @@ const CATALOG = [
   ["M 35", "", "cluster", 6.1483, 24.3333, 5.3, "NGC 2168"],
   ["M 44", "Beehive Cluster", "cluster", 8.6733, 19.6667, 3.7, "Praesepe NGC 2632"],
   ["M 45", "Pleiades", "cluster", 3.79, 24.1167, 1.6, "Seven Sisters"],
+  // Between NGC 869 and NGC 884, so both fit.
   ["NGC 869", "Double Cluster", "cluster", 2.3333, 57.1333, 3.7, "NGC 884"],
 ].map(([id, name, type, ra, dec, mag, aka]) => ({ id, name, type, ra, dec, mag, aka }));
 
@@ -291,7 +294,7 @@ class Dwarf3Card extends HTMLElement {
 
   connectedCallback() {
     this._clock = setInterval(() => this._tick(), 60000);
-    this._pipTimer = setInterval(() => this._refreshPip(), 15000);
+    this._pipTimer = setInterval(() => this._refreshPip(), 10000);
     this._onResize = () => this._layout();
     window.addEventListener("resize", this._onResize);
     this._resizeObserver = new ResizeObserver(this._onResize);
@@ -348,6 +351,14 @@ class Dwarf3Card extends HTMLElement {
     this._deviceName = hass.devices?.[deviceId]?.name_by_user || hass.devices?.[deviceId]?.name || "DWARF 3";
     // Any entity of the device works as a service target.
     this._target = { entity_id: ents.battery || ents.prepare || mine[0].entity_id };
+  }
+
+  // The latest stack's picture, or null when the card has none. HA keeps the same URL when the picture changes,
+  // so the state (the time it changed) goes on the end to make browsers fetch the new one.
+  _stackUrl() {
+    const st = this._st("latestStack");
+    if (!st?.attributes.session || !st.attributes.entity_picture) return null;
+    return `${st.attributes.entity_picture}&v=${encodeURIComponent(st.state)}`;
   }
 
   _st(role) {
@@ -446,7 +457,7 @@ class Dwarf3Card extends HTMLElement {
           <header class="topbar">
             <div class="brand">
               <span class="dot" id="online-dot"></span>
-              <span class="name">${esc(this._deviceName)}</span>
+              <button class="name" id="device-btn" title="Device details">${esc(this._deviceName)}</button>
               <span class="pill" id="state-pill"></span>
             </div>
             <div class="stats">
@@ -554,16 +565,13 @@ class Dwarf3Card extends HTMLElement {
     const root = this.shadowRoot;
     this.$("view-switch").addEventListener("click", (ev) => {
       const v = ev.target.closest("button")?.dataset.view;
-      if (v && v !== this._view) {
-        this._view = v;
-        this._renderViewport();
-        this._update();
-      }
+      if (v) this._setView(v);
     });
-    this.$("pip").addEventListener("click", () => {
-      this._view = this._view === "tele" ? "wide" : "tele";
-      this._renderViewport();
-      this._update();
+    this.$("pip").addEventListener("click", () => this._setView(this._view === "tele" ? "wide" : "tele"));
+    this.$("device-btn").addEventListener("click", () => {
+      // HA has no device dialog; the more-info dialog names the device and links to its page.
+      const entityId = this._ents.online || this._target.entity_id;
+      this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
     });
     this.$("tabs").addEventListener("click", (ev) => {
       const t = ev.target.closest("button")?.dataset.tab;
@@ -651,7 +659,7 @@ class Dwarf3Card extends HTMLElement {
 
   // ha-camera-stream is lazy-loaded by the frontend. Building a picture-entity card pulls it in.
   async _ensureStreamElement() {
-    if (customElements.get("ha-camera-stream")) return;
+    if (customElements.get("ha-camera-stream") || this._noStreamElement) return;
     try {
       const helpers = await window.loadCardHelpers?.();
       const card = helpers?.createCardElement({ type: "picture-entity", entity: this._ents.teleCamera, camera_view: "live" });
@@ -662,16 +670,77 @@ class Dwarf3Card extends HTMLElement {
         setTimeout(() => card.remove(), 3000);
       }
       await Promise.race([customElements.whenDefined("ha-camera-stream"), new Promise((r) => setTimeout(r, 2500))]);
+      this._noStreamElement = !customElements.get("ha-camera-stream"); // wait once, not on every switch
     } catch (_) {
       /* fall back to stills */
     }
   }
 
-  _refreshPip() {
-    if (!this._built || this._view === "stack") return;
-    const other = this._st(this._view === "tele" ? "wideCamera" : "teleCamera");
+  _setView(view) {
+    if (view === this._view) return;
+    // The camera leaving the main view goes to the PiP: show its last live frame at once, since a still from the
+    // scope takes seconds (the tele waits for a keyframe).
+    const frame = this._view !== "stack" && view !== "stack" ? this._captureMain() : null;
+    this._view = view;
+    this._renderViewport();
+    this._pipToken = (this._pipToken || 0) + 1;
+    this._pipLoading = false;
     const img = this.$("pip-img");
-    if (other?.attributes.entity_picture) img.src = `${other.attributes.entity_picture}&t=${Date.now()}`;
+    if (frame) img.src = frame;
+    else img.removeAttribute("src");
+    this.$("pip").classList.toggle("pending", !frame);
+    this._refreshPip();
+    this._update();
+  }
+
+  // The current frame of the main view as a small JPEG, or null when nothing is playing yet.
+  _captureMain() {
+    const find = (node) => {
+      if (!node) return null;
+      if (node.tagName === "VIDEO" && node.videoWidth) return node;
+      if (node.tagName === "IMG" && node.complete && node.naturalWidth) return node;
+      for (const child of [...(node.shadowRoot?.children || []), ...node.children]) {
+        const found = find(child);
+        if (found) return found;
+      }
+      return null;
+    };
+    const media = find(this.$("viewport"));
+    if (!media) return null;
+    const w = media.videoWidth || media.naturalWidth;
+    const h = media.videoHeight || media.naturalHeight;
+    const scale = Math.min(1, 480 / w);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(w * scale);
+    canvas.height = Math.round(h * scale);
+    try {
+      canvas.getContext("2d").drawImage(media, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", 0.8);
+    } catch (_) {
+      return null; // a cross-origin frame cannot be read back
+    }
+  }
+
+  // Load a fresh still for the PiP off-screen and show it once it has arrived, unless the cameras were swapped
+  // in the meantime.
+  _refreshPip() {
+    if (!this._built || this._view === "stack" || this._pipLoading) return;
+    const other = this._st(this._view === "tele" ? "wideCamera" : "teleCamera");
+    const url = other?.attributes.entity_picture;
+    if (!url) return;
+    const token = this._pipToken;
+    const next = new Image();
+    this._pipLoading = true;
+    next.onload = () => {
+      if (token !== this._pipToken) return;
+      this._pipLoading = false;
+      this.$("pip-img").src = next.src;
+      this.$("pip").classList.remove("pending");
+    };
+    next.onerror = () => {
+      if (token === this._pipToken) this._pipLoading = false;
+    };
+    next.src = `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
   }
 
   // ----- joystick -----
@@ -998,9 +1067,9 @@ class Dwarf3Card extends HTMLElement {
   _panelGallery() {
     const stack = this._st("latestStack");
     const a = stack?.attributes || {};
-    const hero = stack?.attributes.entity_picture
+    const hero = this._stackUrl()
       ? `<div class="hero" id="hero">
-          <img src="${esc(a.entity_picture)}" alt="">
+          <img src="${esc(this._stackUrl())}" alt="">
           <div class="hero-meta">
             <span class="kicker">Latest stack</span>
             <b>${esc(a.target || "Capture")}</b>
@@ -1040,7 +1109,7 @@ class Dwarf3Card extends HTMLElement {
     });
     panel.querySelector("#hero")?.addEventListener("click", () => {
       const a = this._st("latestStack").attributes;
-      this._openLightbox({ session: a.session, title: a.target }, a.entity_picture);
+      this._openLightbox({ session: a.session, title: a.target }, this._stackUrl());
     });
     panel.querySelector(".grid")?.addEventListener("click", (ev) => {
       const b = ev.target.closest(".thumb");
@@ -1113,7 +1182,7 @@ class Dwarf3Card extends HTMLElement {
         ${action("prepare", "mdi:power", "Prepare", "Wake after power on")}
         ${action("calibrate", "mdi:star-shooting-outline", "Calibrate", "Plate solve on stars")}
         ${action("pointUp", "mdi:arrow-up-bold-circle-outline", "Point up", "Straight to zenith")}
-        ${action("closeBarrel", "mdi:archive-arrow-down-outline", "Close barrel", "Park the arm")}
+        ${action("closeBarrel", "mdi:archive-arrow-down-outline", "Close barrel", "Turn it to stow")}
       </div>
 
       <div class="section-head"><span>Nudge</span></div>
@@ -1145,7 +1214,7 @@ class Dwarf3Card extends HTMLElement {
       b.addEventListener("click", () => {
         const role = b.dataset.press;
         if (role === "closeBarrel")
-          this._confirm("Close the barrel? The arm folds down and any capture stops.", () =>
+          this._confirm("Close the barrel? It turns to its stowed position and any capture stops.", () =>
             this._press(role, "Closing the barrel"),
           );
         else this._press(role, `${b.querySelector("b").textContent}…`);
@@ -1262,12 +1331,21 @@ class Dwarf3Card extends HTMLElement {
       if (st && st !== this._streamEl.stateObj) this._streamEl.stateObj = st;
     }
     if (this._view === "stack" && this._stackImg) {
-      const pic = this._st("latestStack")?.attributes.entity_picture;
+      const pic = this._stackUrl();
       if (pic && this._stackImg.getAttribute("src") !== pic) this._stackImg.src = pic;
+      if (!pic) this._stackImg.removeAttribute("src");
+      this.$("viewport").classList.toggle("no-stack", !pic);
     }
+    // The latest stack changed (a new capture, or it was deleted): the gallery list is stale too.
+    const stackState = this._st("latestStack")?.state;
+    if (this._lastStackState !== undefined && stackState !== this._lastStackState) {
+      this._gallery = null;
+      if (this._tab === "gallery") this._renderPanel();
+    }
+    this._lastStackState = stackState;
     $("pip").style.display = this._view === "stack" ? "none" : "";
     $("pip-label").textContent = this._view === "tele" ? "Wide" : "Tele";
-    if (!$("pip-img").src) this._refreshPip();
+    if (!$("pip-img").getAttribute("src")) this._refreshPip();
     $("reticle").style.display = this._view === "stack" ? "none" : "";
 
     // HUD
@@ -1425,7 +1503,8 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .topbar { grid-area: top; display:flex; align-items:center; justify-content:space-between; gap:12px;
   padding: 10px 14px; background: var(--d-top); border-bottom: 1px solid var(--d-line); }
 .brand { display:flex; align-items:center; gap:10px; min-width:0; }
-.brand .name { font-weight: 650; letter-spacing: .02em; white-space: nowrap; }
+.brand .name { font-weight: 650; font-size: 16px; letter-spacing: .02em; white-space: nowrap; padding: 4px 6px; margin: -4px -6px; border-radius: 8px; }
+.brand .name:hover { background: var(--d-raise); }
 .dot { width:8px; height:8px; border-radius:50%; background: var(--d-mute); flex: none; }
 .dot.on { background: var(--d-ok); box-shadow: 0 0 10px var(--d-ok); }
 .dot.off { background: var(--d-bad); }
@@ -1458,6 +1537,8 @@ ha-card.night #night-btn { color: var(--d-bad); }
 .viewport img, .viewport ha-camera-stream { object-fit: contain; }
 .viewport ha-camera-stream { --video-max-height: 100%; display:flex; align-items:center; justify-content:center; }
 .stack-img { object-fit: contain; background: #000; }
+.stack-img:not([src]) { visibility: hidden; }
+.viewport.no-stack::after { content: "No stacks yet"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--d-mute); font-size: 15px; }
 .no-signal { display:flex !important; flex-direction:column; align-items:center; justify-content:center; gap:8px; color: var(--d-mute); }
 .no-signal ha-icon { --mdc-icon-size: 40px; }
 .reticle { position:absolute; left:50%; top:50%; width: 64px; height: 64px; transform: translate(-50%,-50%); pointer-events:none; opacity:.55; }
@@ -1472,6 +1553,8 @@ ha-card.night #night-btn { color: var(--d-bad); }
 .pip { position:absolute; top:12px; right:12px; width: 22%; max-width: 200px; min-width: 110px; aspect-ratio: 16/9; border-radius: 12px; overflow:hidden; border: 1px solid rgba(255,255,255,.18); background:#000; box-shadow: 0 6px 24px rgba(0,0,0,.5); padding:0; }
 .pip img { width:100%; height:100%; object-fit: cover; display:block; }
 .pip img:not([src]) { visibility: hidden; }
+.pip.pending::after { content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.2); border-top-color: var(--d-accent); animation: spin .8s linear infinite; }
 .pip span { position:absolute; left:6px; bottom:5px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; background: rgba(0,0,0,.6); padding: 2px 6px; border-radius: 6px; }
 
 .hud { position:absolute; left: 14px; top: 58px; pointer-events:none; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
