@@ -140,7 +140,11 @@ All take a DWARF 3 device as the target.
 
 - Anyone on your home network can control the scope through the relay, as they can without it. The relay app has an option to
   require an access token if you share your network.
-- The relay's status refreshes every 30 s (read-only: 60 s). Change it under **Configure**.
+- With a relay of version 0.5.0 or newer, changes show up within a second: the relay pushes them (battery, temperatures,
+  capture, tracking, the app connection, and the scope coming online), and the integration listens. The 30 s refresh then only
+  reads what the scope can't push, such as pitch, rotation and dark counts. If the link drops, the log says so once and again
+  when it is back, with no line for each retry. Older relays are polled every 30 s as before. Read-only mode polls every 60 s.
+  Change the interval under **Configure**.
 - Live video (wide and tele) is the scope's RTSP stream, played by Home Assistant. In full control it goes through the relay, which
   forwards port 554 (so the relay needs the host network, as the app does). In read-only mode it comes straight from the scope, and
   only plays while the DWARFLAB app has the camera running, since nothing here can Prepare. The scope only streams after **Prepare**.

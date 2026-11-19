@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 
 import aiohttp
@@ -23,6 +24,10 @@ class RelayUnauthorized(RelayError):
 
 class RelayBusy(RelayError):
     """Another job or client holds the scope."""
+
+
+class EventsUnsupported(RelayError):
+    """The relay is older than its live event stream."""
 
 
 class ScopeError(RelayError):
@@ -60,6 +65,38 @@ class RelayClient:
 
     async def capabilities(self) -> dict[str, Any]:
         return await self._request("GET", "/api/capabilities")
+
+    async def events(self) -> AsyncIterator[dict[str, Any]]:
+        """The relay's live status events, until the connection ends.
+
+        The relay sends a comment line every 15 s while nothing changes, so 45 s of silence means it is gone."""
+        headers = {"Authorization": f"Bearer {self._token}"} if self._token else {}
+        timeout = aiohttp.ClientTimeout(total=None, connect=10, sock_read=45)
+        try:
+            async with self._session.get(self._base + "/api/events", headers=headers, timeout=timeout) as response:
+                if response.status in (404, 405):
+                    raise EventsUnsupported("this relay has no event stream")
+                if response.status == 401:
+                    raise RelayUnauthorized("the relay wants a token")
+                if response.status >= 400:
+                    raise RelayError(f"HTTP {response.status}")
+                name: str | None = None
+                data: list[str] = []
+                async for raw in response.content:
+                    line = raw.decode("utf-8", "replace").rstrip("\r\n")
+                    if not line:
+                        if name == "status" and data:
+                            try:
+                                yield json.loads("\n".join(data))
+                            except ValueError:
+                                pass
+                        name, data = None, []
+                    elif line.startswith("event:"):
+                        name = line[6:].strip()
+                    elif line.startswith("data:"):
+                        data.append(line[5:].lstrip())
+        except (TimeoutError, aiohttp.ClientError) as err:
+            raise RelayUnreachable(str(err) or type(err).__name__) from err
 
     async def status(self) -> dict[str, Any]:
         return await self._request("GET", "/api/status", timeout=60)
