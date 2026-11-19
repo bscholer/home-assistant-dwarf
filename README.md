@@ -65,6 +65,22 @@ include what the scope reports about your Wi-Fi.
 - **Full control adds:** capture state (idle, running, done, failed), capture progress, frames captured and failed, battery, body
   and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide camera, and buttons for
   Prepare, Calibrate, Close barrel and Stop capture.
+- **Latest stack**, an image of the newest session's `stacked.jpg`, scaled to 1280 px wide. It refreshes every 30 s while a
+  capture runs (if the scope rewrites the file as it stacks, it updates live) and every 10 minutes otherwise. Cast it to a smart
+  display when a capture finishes:
+
+  ```yaml
+  triggers:
+    - trigger: state
+      entity_id: event.dwarf_3_capture_finished
+  actions:
+    - action: media_player.play_media
+      target:
+        entity_id: media_player.office_display
+      data:
+        media_content_type: image/jpeg
+        media_content_id: media-source://image/image.dwarf_3_latest_stack
+  ```
 - **Pitch and rotation** sensors, in degrees, like a PTZ camera's pan and tilt position. They are the scope's motor angles,
   not altitude and azimuth, because the mount is tilted. Pitch 172.5 is straight up and 0 is the closed barrel.
 - **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5.

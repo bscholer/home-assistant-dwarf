@@ -16,6 +16,7 @@ import aiohttp
 from .const import ALBUM_ROOT, SCOPE_API_PORT
 
 RAW_SESSION = re.compile(r"^DWARF_RAW_")
+STACK_FILE = "stacked.jpg"
 STAMP = re.compile(r"(\d{4}-\d\d-\d\d-\d\d-\d\d-\d\d-\d+)$")
 
 
@@ -57,6 +58,38 @@ class ScopeDirectClient:
                 if isinstance(card.get(field), (int, float)):
                     out[key] = float(card[field])
         return out
+
+    def fetch_stack_blocking(self, known: tuple[str, int] | None) -> tuple[str, int, bytes | None] | None:
+        """The newest session's stacked.jpg, over FTP. Returns (session, size, jpeg), with jpeg None if unchanged.
+
+        Run it in an executor. `known` is the (session, size) already held, so a check costs two listings.
+        """
+        ftp = ftplib.FTP(self.host, timeout=30)
+        try:
+            ftp.login()
+            names = [n.rsplit("/", 1)[-1] for n in ftp.nlst(ALBUM_ROOT)]
+            sessions = sorted((n for n in names if RAW_SESSION.match(n)), key=session_order)
+            if not sessions:
+                return None
+            session = sessions[-1]
+            lines: list[str] = []
+            ftp.dir(f"{ALBUM_ROOT}/{session}", lines.append)
+            size = next(
+                (int(p[4]) for p in (line.split(None, 8) for line in lines) if len(p) == 9 and p[8] == STACK_FILE),
+                None,
+            )
+            if size is None:
+                return None
+            if known == (session, size):
+                return session, size, None
+            buffer = bytearray()
+            ftp.retrbinary(f"RETR {ALBUM_ROOT}/{session}/{STACK_FILE}", buffer.extend)
+            return session, size, bytes(buffer)
+        finally:
+            try:
+                ftp.quit()
+            except (ftplib.Error, OSError):
+                ftp.close()
 
     def list_sessions_blocking(self) -> list[str]:
         """List capture sessions over anonymous FTP. Run it in an executor."""

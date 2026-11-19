@@ -46,6 +46,7 @@ def mock_relay(mock: AiohttpClientMocker, status=STATUS, status_code=200, move_c
     mock.get(f"{BASE}/api/status", json=status, status=status_code)
     mock.post(f"{BASE}/api/move", json={"detail": "x", "code": "invalid_request"}, status=move_code)
     mock.get(f"{BASE}/api/sessions", json={"sessions": ["DWARF_RAW_a", "DWARF_RAW_b", "DWARF_RAW_c"]})
+    mock.get(f"{BASE}/api/files", json={"entries": []})
 
 
 async def setup(hass: HomeAssistant) -> MockConfigEntry:
@@ -894,3 +895,185 @@ async def test_there_are_no_pitch_or_rotation_sliders(hass: HomeAssistant, aiocl
     mock_relay(aioclient_mock)
     await setup(hass)
     assert not hass.states.async_entity_ids("number"), "a slider that moves motors is too easy to hit by accident"
+
+
+# ---- the latest stack as an image
+
+NEWEST = "DWARF_RAW_TELE_M 81_EXP_30_GAIN_60_2026-11-18-03-11-46-101"
+OLDER = "DWARF_RAW_TELE_NGC 224_EXP_30_GAIN_60_2026-11-17-21-06-11-337"
+
+
+def make_jpeg(width: int = 2400, height: int = 1200, shade: int = 90) -> bytes:
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (width, height), (shade, shade, shade)).save(out, "JPEG")
+    return out.getvalue()
+
+
+def mock_stack(mock, jpeg: bytes, *, sessions=(OLDER, NEWEST)):
+    """Register these before mock_relay, since the first matching mock wins."""
+    import base64
+
+    mock.get(f"{BASE}/api/sessions", json={"sessions": list(sessions)})
+    mock.get(
+        f"{BASE}/api/files",
+        json={"entries": [{"name": "stacked.jpg", "size": len(jpeg), "dir": False},
+                          {"name": "stacked_thumbnail.jpg", "size": 40000, "dir": False}]},
+    )
+    mock.get(
+        f"{BASE}/api/files/chunk",
+        json={"offset": 0, "size": len(jpeg), "data": base64.b64encode(jpeg).decode(), "eof": True},
+    )
+
+
+def stack_entity(hass):
+    return hass.data["image"].get_entity("image.dwarf_3_latest_stack")
+
+
+def calls(mock, path):
+    return [c for c in mock.mock_calls if c[1].path == path]
+
+
+async def test_the_newest_stack_is_an_image_entity(hass: HomeAssistant, aioclient_mock):
+    import io
+
+    from PIL import Image
+
+    mock_stack(aioclient_mock, make_jpeg())
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    state = hass.states.get("image.dwarf_3_latest_stack")
+    assert state.state != "unknown", "it has been updated"
+    assert state.attributes["session"] == NEWEST and state.attributes["target"] == "M 81"
+    assert (state.attributes["exposure_s"], state.attributes["gain"]) == (30, 60)
+    assert state.attributes["started"] == "2026-11-18 03:11:46"
+    image = Image.open(io.BytesIO(await stack_entity(hass).async_image()))
+    assert (image.format, image.width) == ("JPEG", 1280), "downscaled for a display"
+    assert [c[1].query["path"] for c in calls(aioclient_mock, "/api/files")] == [NEWEST], "looked at the newest only"
+
+
+async def test_an_unchanged_stack_is_not_downloaded_again(hass: HomeAssistant, aioclient_mock):
+    mock_stack(aioclient_mock, make_jpeg())
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    assert len(calls(aioclient_mock, "/api/files/chunk")) == 1
+    entry.runtime_data.stack.last_check -= 10_000  # long enough ago that a check is due
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls(aioclient_mock, "/api/files")) == 2, "checked the size"
+    assert len(calls(aioclient_mock, "/api/files/chunk")) == 1, "but the file was the same"
+
+
+async def test_while_capturing_a_changed_stack_is_picked_up_within_a_poll(hass: HomeAssistant, aioclient_mock):
+    mock_stack(aioclient_mock, make_jpeg(height=1200))
+    mock_relay(aioclient_mock)  # STATUS has a running job
+    entry = await setup(hass)
+    first = hass.states.get("image.dwarf_3_latest_stack").state
+
+    aioclient_mock.clear_requests()
+    mock_stack(aioclient_mock, make_jpeg(height=1500))  # the scope stacked another frame: a bigger file
+    mock_relay(aioclient_mock)
+    entry.runtime_data.stack.last_check -= 31  # a running capture is checked every 30 s
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls(aioclient_mock, "/api/files/chunk")) == 1, "downloaded again"
+    assert hass.states.get("image.dwarf_3_latest_stack").state != first, "and the entity says it updated"
+
+
+async def test_a_finished_capture_gets_one_last_look(hass: HomeAssistant, aioclient_mock):
+    mock_stack(aioclient_mock, make_jpeg(height=1200))
+    mock_relay(aioclient_mock)  # running
+    entry = await setup(hass)
+
+    aioclient_mock.clear_requests()
+    done = {**STATUS, "capture_state": 0, "job": {**STATUS["job"], "state": "done"}}
+    mock_stack(aioclient_mock, make_jpeg(height=1600))
+    mock_relay(aioclient_mock, status=done)
+    # the last check was moments ago, so only the running-to-done change can make another one due
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls(aioclient_mock, "/api/files/chunk")) == 1
+
+
+async def test_an_idle_scope_is_checked_rarely(hass: HomeAssistant, aioclient_mock):
+    done = {**STATUS, "capture_state": 0, "job": {**STATUS["job"], "state": "done"}}
+    mock_stack(aioclient_mock, make_jpeg())
+    mock_relay(aioclient_mock, status=done)
+    entry = await setup(hass)
+    aioclient_mock.mock_calls.clear()
+    for _ in range(3):
+        await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert calls(aioclient_mock, "/api/files") == [], "no check within ten minutes of the last"
+
+
+async def test_no_stack_yet_is_just_unknown(hass: HomeAssistant, aioclient_mock):
+    aioclient_mock.get(f"{BASE}/api/sessions", json={"sessions": []})
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("image.dwarf_3_latest_stack").state == "unknown"
+
+
+async def test_a_scope_that_is_off_does_not_break_the_image(hass: HomeAssistant, aioclient_mock):
+    aioclient_mock.get(f"{BASE}/api/sessions", json={"detail": "off", "code": "scope_error"}, status=502)
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get("image.dwarf_3_latest_stack").state == "unknown"
+
+
+async def test_read_only_mode_has_the_stack_too(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    from custom_components.dwarf3.direct import ScopeDirectClient
+
+    jpeg = make_jpeg()
+    monkeypatch.setattr(ScopeDirectClient, "fetch_stack_blocking", lambda self, known: (NEWEST, len(jpeg), jpeg))
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    await setup_direct(hass, monkeypatch)
+    state = hass.states.get("image.dwarf_3_latest_stack")
+    assert state.attributes["target"] == "M 81"
+
+
+async def test_stack_entity_keeps_its_id_on_a_switch(hass: HomeAssistant, aioclient_mock, monkeypatch, local_ip):
+    from homeassistant.helpers import entity_registry as er
+
+    from custom_components.dwarf3.direct import ScopeDirectClient
+
+    jpeg = make_jpeg()
+    monkeypatch.setattr(ScopeDirectClient, "fetch_stack_blocking", lambda self, known: (NEWEST, len(jpeg), jpeg))
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    before = er.async_get(hass).async_get("image.dwarf_3_latest_stack").unique_id
+
+    local_ip("relay.test")
+    mock_stack(aioclient_mock, jpeg)
+    mock_relay(aioclient_mock)
+    result = await entry.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert er.async_get(hass).async_get("image.dwarf_3_latest_stack").unique_id == before
+
+
+def test_session_names_are_described():
+    from custom_components.dwarf3.stack import describe
+
+    assert describe(NEWEST) == {"session": NEWEST, "camera": "tele", "exposure_s": 30, "gain": 60,
+                                "started": "2026-11-18 03:11:46", "target": "M 81"}
+    no_target = describe("DWARF_RAW_TELE_EXP_15_GAIN_60_2026-11-05-22-57-32-526")
+    assert "target" not in no_target and no_target["exposure_s"] == 15
+    assert describe("something else") == {"session": "something else"}
+
+
+def test_a_small_image_is_not_resized():
+    import io
+
+    from PIL import Image
+
+    from custom_components.dwarf3.stack import downscale
+
+    assert Image.open(io.BytesIO(downscale(make_jpeg(800, 400)))).width == 800

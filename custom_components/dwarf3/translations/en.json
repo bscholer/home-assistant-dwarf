@@ -228,6 +228,11 @@
           }
         }
       }
+    },
+    "image": {
+      "latest_stack": {
+        "name": "Latest stack"
+      }
     }
   },
   "services": {

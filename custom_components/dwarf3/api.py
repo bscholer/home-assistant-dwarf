@@ -97,6 +97,22 @@ class RelayClient:
     async def sessions(self) -> list[str]:
         return (await self._request("GET", "/api/sessions", timeout=60))["sessions"]
 
+    async def files(self, path: str) -> list[dict[str, Any]]:
+        return (await self._request("GET", "/api/files", params={"path": path}, timeout=60))["entries"]
+
+    async def download(self, path: str, size: int) -> bytes:
+        """Download a file from the scope's album, a megabyte at a time."""
+        out = bytearray()
+        while len(out) < size:
+            body = await self._request(
+                "GET", "/api/files/chunk", params={"path": path, "offset": len(out), "length": 1 << 20}, timeout=60
+            )
+            data = base64.b64decode(body["data"])
+            if not data:
+                break
+            out += data
+        return bytes(out)
+
     async def start_dark(self, frames: int, exposure: str, wide: bool) -> None:
         await self._request("POST", "/api/dark", json={"frames": frames, "exposure": exposure, "wide": wide})
 

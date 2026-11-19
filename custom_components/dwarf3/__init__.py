@@ -13,11 +13,12 @@ from .const import CONF_MODE, CONF_TOKEN, DOMAIN, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator, Dwarf3DirectCoordinator
 from .direct import ScopeDirectClient
 from .services import async_setup_services
+from .stack import DirectStackSource, RelayStackSource, StackTracker
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.CAMERA, Platform.EVENT, Platform.SENSOR]
-DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.CAMERA, Platform.EVENT, Platform.IMAGE, Platform.SENSOR]
+DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.IMAGE, Platform.SENSOR]
 
 
 
@@ -36,6 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     if entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT:
         direct = Dwarf3DirectCoordinator(hass, entry, ScopeDirectClient(session, entry.data[CONF_HOST]))
         direct.data = {}
+        direct.stack = StackTracker(hass, DirectStackSource(hass, direct.client))
         direct.platforms = DIRECT_PLATFORMS
         entry.runtime_data = direct
         await hass.config_entries.async_forward_entry_setups(entry, DIRECT_PLATFORMS)
@@ -53,6 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     coordinator = Dwarf3Coordinator(hass, entry, client)
     coordinator.relay_version = (capabilities.get("service") or {}).get("version")
     coordinator.data = {}
+    coordinator.stack = StackTracker(hass, RelayStackSource(client))
     coordinator.platforms = PLATFORMS
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
