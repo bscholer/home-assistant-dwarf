@@ -8,7 +8,7 @@
  * The card finds its entities through the entity registry (translation keys), so renamed entities keep working.
  */
 
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 const DOMAIN = "dwarf3";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
@@ -351,6 +351,14 @@ class Dwarf3Card extends HTMLElement {
     this._deviceName = hass.devices?.[deviceId]?.name_by_user || hass.devices?.[deviceId]?.name || "DWARF 3";
     // Any entity of the device works as a service target.
     this._target = { entity_id: ents.battery || ents.prepare || mine[0].entity_id };
+  }
+
+  // The latest stack's picture, or null when the card has none. HA keeps the same URL when the picture changes,
+  // so the state (the time it changed) goes on the end to make browsers fetch the new one.
+  _stackUrl() {
+    const st = this._st("latestStack");
+    if (!st?.attributes.session || !st.attributes.entity_picture) return null;
+    return `${st.attributes.entity_picture}&v=${encodeURIComponent(st.state)}`;
   }
 
   _st(role) {
@@ -1059,9 +1067,9 @@ class Dwarf3Card extends HTMLElement {
   _panelGallery() {
     const stack = this._st("latestStack");
     const a = stack?.attributes || {};
-    const hero = stack?.attributes.entity_picture
+    const hero = this._stackUrl()
       ? `<div class="hero" id="hero">
-          <img src="${esc(a.entity_picture)}" alt="">
+          <img src="${esc(this._stackUrl())}" alt="">
           <div class="hero-meta">
             <span class="kicker">Latest stack</span>
             <b>${esc(a.target || "Capture")}</b>
@@ -1101,7 +1109,7 @@ class Dwarf3Card extends HTMLElement {
     });
     panel.querySelector("#hero")?.addEventListener("click", () => {
       const a = this._st("latestStack").attributes;
-      this._openLightbox({ session: a.session, title: a.target }, a.entity_picture);
+      this._openLightbox({ session: a.session, title: a.target }, this._stackUrl());
     });
     panel.querySelector(".grid")?.addEventListener("click", (ev) => {
       const b = ev.target.closest(".thumb");
@@ -1323,9 +1331,18 @@ class Dwarf3Card extends HTMLElement {
       if (st && st !== this._streamEl.stateObj) this._streamEl.stateObj = st;
     }
     if (this._view === "stack" && this._stackImg) {
-      const pic = this._st("latestStack")?.attributes.entity_picture;
+      const pic = this._stackUrl();
       if (pic && this._stackImg.getAttribute("src") !== pic) this._stackImg.src = pic;
+      if (!pic) this._stackImg.removeAttribute("src");
+      this.$("viewport").classList.toggle("no-stack", !pic);
     }
+    // The latest stack changed (a new capture, or it was deleted): the gallery list is stale too.
+    const stackState = this._st("latestStack")?.state;
+    if (this._lastStackState !== undefined && stackState !== this._lastStackState) {
+      this._gallery = null;
+      if (this._tab === "gallery") this._renderPanel();
+    }
+    this._lastStackState = stackState;
     $("pip").style.display = this._view === "stack" ? "none" : "";
     $("pip-label").textContent = this._view === "tele" ? "Wide" : "Tele";
     if (!$("pip-img").getAttribute("src")) this._refreshPip();
@@ -1520,6 +1537,8 @@ ha-card.night #night-btn { color: var(--d-bad); }
 .viewport img, .viewport ha-camera-stream { object-fit: contain; }
 .viewport ha-camera-stream { --video-max-height: 100%; display:flex; align-items:center; justify-content:center; }
 .stack-img { object-fit: contain; background: #000; }
+.stack-img:not([src]) { visibility: hidden; }
+.viewport.no-stack::after { content: "No stacks yet"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--d-mute); font-size: 15px; }
 .no-signal { display:flex !important; flex-direction:column; align-items:center; justify-content:center; gap:8px; color: var(--d-mute); }
 .no-signal ha-icon { --mdc-icon-size: 40px; }
 .reticle { position:absolute; left:50%; top:50%; width: 64px; height: 64px; transform: translate(-50%,-50%); pointer-events:none; opacity:.55; }

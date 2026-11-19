@@ -111,7 +111,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
                 await coordinator.client.delete_session(call.data["session"])
             except RelayError as err:
                 raise HomeAssistantError(f"delete_session failed: {err}") from err
+            coordinator.library.forget(call.data["session"])
+            coordinator.stack.forget(call.data["session"])
             await coordinator.sessions.async_refresh()
+            await coordinator.stack.async_check()  # show the newest stack left, now rather than in 10 minutes
 
     hass.services.async_register(DOMAIN, "start_dark", start_dark, schema=DARK_SCHEMA)
     hass.services.async_register(DOMAIN, "move", move, schema=MOVE_SCHEMA)
