@@ -121,3 +121,13 @@ def supervisor(monkeypatch):
         return fake
 
     return install
+
+
+@pytest.fixture(autouse=True)
+def no_live_listener(monkeypatch):
+    """The live stream is a task that never ends, so most tests run without it. tests/test_live.py opts in."""
+
+    async def idle(coordinator):
+        return None
+
+    monkeypatch.setattr("custom_components.dwarf3.follow_relay", idle)
