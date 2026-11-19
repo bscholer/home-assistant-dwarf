@@ -1,6 +1,6 @@
 goto:
   target:
-    device:
+    entity:
       integration: dwarf3
   fields:
     name:
@@ -28,7 +28,7 @@ goto:
           mode: box
 start_capture:
   target:
-    device:
+    entity:
       integration: dwarf3
   fields:
     frames:
@@ -58,7 +58,7 @@ start_capture:
           options: [vis, astro, duo]
 start_dark:
   target:
-    device:
+    entity:
       integration: dwarf3
   fields:
     frames:
@@ -80,7 +80,7 @@ start_dark:
         boolean:
 move:
   target:
-    device:
+    entity:
       integration: dwarf3
   fields:
     angle:
@@ -109,7 +109,7 @@ move:
           mode: slider
 point:
   target:
-    device:
+    entity:
       integration: dwarf3
   fields:
     pitch:
@@ -130,7 +130,7 @@ point:
           mode: box
 delete_session:
   target:
-    device:
+    entity:
       integration: dwarf3
   fields:
     session:

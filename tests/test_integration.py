@@ -706,3 +706,15 @@ async def test_a_slow_install_shows_progress_then_finishes(
     gate.set()
     result = await _finish_progress(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_services_accept_an_entity_as_the_target(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    aioclient_mock.post(f"{BASE}/api/move", json={"message": "moved"})  # first, so it wins over mock_relay's own
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    # the service target picker offers this integration's entities, and any of them picks the device
+    await hass.services.async_call(
+        DOMAIN, "move", {"entity_id": "sensor.dwarf_3_battery", "angle": 90}, blocking=True
+    )
+    posts = [c for c in aioclient_mock.mock_calls if c[0] == "POST" and c[1].path == "/api/move" and c[2].get("angle")]
+    assert posts and posts[0][2]["angle"] == 90.0

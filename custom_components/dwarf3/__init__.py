@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import RelayClient, RelayError
-from .const import CONF_MODE, CONF_TOKEN, MODE_DIRECT, MODE_RELAY
+from .const import CONF_MODE, CONF_TOKEN, DOMAIN, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator, Dwarf3DirectCoordinator
 from .direct import ScopeDirectClient
 from .services import async_setup_services
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.CAMERA, Platform.EVENT, Platform.SENSOR]
 DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
