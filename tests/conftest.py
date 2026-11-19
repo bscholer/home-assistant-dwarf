@@ -9,6 +9,16 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 
 @pytest.fixture(autouse=True)
+def card_www(tmp_path, monkeypatch):
+    """The card is copied into www; keep that out of the shared test config folder."""
+    from custom_components.dwarf3 import card
+
+    www = tmp_path / "www"
+    monkeypatch.setattr(card, "_www", lambda hass: www)
+    return www
+
+
+@pytest.fixture(autouse=True)
 def no_local_relay(monkeypatch):
     """By default no relay is found on this Home Assistant, and nothing touches the real network."""
 

@@ -1,7 +1,9 @@
+from pathlib import Path
+
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
-from custom_components.dwarf3.card import CARD_URL, async_remove_card, async_setup_card
+from custom_components.dwarf3.card import CARD_URL, LOCAL_CARD_URL, async_remove_card, async_setup_card
 
 
 async def _resources(hass: HomeAssistant):
@@ -15,7 +17,7 @@ async def _resources(hass: HomeAssistant):
 
 
 def _ours(resources):
-    return [r for r in resources.async_items() if r["url"].split("?")[0] == CARD_URL]
+    return [r for r in resources.async_items() if r["url"].split("?")[0] in (CARD_URL, LOCAL_CARD_URL)]
 
 
 async def test_card_is_added_once(hass: HomeAssistant):
@@ -53,3 +55,24 @@ def test_card_fonts_ship_with_the_card():
     for weight in (400, 500, 600, 700):
         assert (FRONTEND_DIR / "fonts" / f"barlow-{weight}.woff2").stat().st_size > 1000
     assert (FRONTEND_DIR / "fonts" / "OFL.txt").exists()
+
+
+async def test_card_is_copied_to_www_and_served_from_local(hass: HomeAssistant, card_www: Path):
+    www = card_www
+    www.mkdir()
+    resources = await _resources(hass)
+    await async_setup_card(hass)
+    assert (www / "dwarf3" / "dwarf3-card.js").exists()
+    assert (www / "dwarf3" / "fonts" / "barlow-500.woff2").exists()
+    assert _ours(resources)[0]["url"].startswith(f"{LOCAL_CARD_URL}?v=")
+    await async_remove_card(hass)
+    assert not (www / "dwarf3").exists()
+
+
+async def test_without_www_at_startup_the_card_uses_its_own_route(hass: HomeAssistant, card_www: Path):
+    resources = await _resources(hass)
+    assert not card_www.exists()
+    await async_setup_card(hass)
+    assert _ours(resources)[0]["url"].startswith(f"{CARD_URL}?v=")
+    # Copied anyway, so /local serves it after the next restart.
+    assert (card_www / "dwarf3" / "dwarf3-card.js").exists()
