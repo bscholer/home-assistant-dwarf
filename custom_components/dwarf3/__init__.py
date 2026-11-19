@@ -19,7 +19,7 @@ from .stack import DirectStackSource, RelayStackSource, StackLibrary, StackTrack
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.CAMERA, Platform.EVENT, Platform.IMAGE, Platform.SENSOR]
-DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.IMAGE, Platform.SENSOR]
+DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.CAMERA, Platform.IMAGE, Platform.SENSOR]
 
 
 

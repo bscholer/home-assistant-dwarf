@@ -214,6 +214,9 @@
     "camera": {
       "wide_camera": {
         "name": "Wide camera"
+      },
+      "tele_camera": {
+        "name": "Tele camera"
       }
     },
     "event": {

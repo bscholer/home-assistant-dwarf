@@ -397,7 +397,7 @@ async def test_direct_mode_has_only_what_the_scope_gives_out(hass: HomeAssistant
     sessions = hass.states.get("sensor.dwarf_3_capture_sessions")
     assert sessions.state == "2"
     assert sessions.attributes["sessions"] == SESSIONS
-    for entity in ("sensor.dwarf_3_battery", "button.dwarf_3_close_barrel", "camera.dwarf_3_wide_camera",
+    for entity in ("sensor.dwarf_3_battery", "button.dwarf_3_close_barrel",
                    "binary_sensor.dwarf_3_tracking", "event.dwarf_3_capture_finished"):
         assert hass.states.get(entity) is None, entity + " needs the control connection"
 
@@ -1240,3 +1240,48 @@ async def test_read_only_mode_browses_over_ftp(hass: HomeAssistant, aioclient_mo
     from custom_components.dwarf3.media_source import stack_path
 
     assert (await (await hass_client()).get(stack_path(entry.entry_id, NEWEST))).status == 200
+
+
+# ---- live video
+
+def camera(hass, kind):
+    return hass.data["camera"].get_entity(f"camera.dwarf_3_{kind}_camera")
+
+
+async def test_both_cameras_stream_through_the_relay_in_full_control(hass: HomeAssistant, aioclient_mock):
+    from homeassistant.components.camera import CameraEntityFeature
+
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    for kind, path in (("wide", "ch1"), ("tele", "ch0")):
+        entity = camera(hass, kind)
+        assert entity.supported_features & CameraEntityFeature.STREAM
+        assert await entity.stream_source() == f"rtsp://relay.test:554/{path}/stream0", "the relay forwards port 554"
+        assert entity.stream_options["rtsp_transport"] == "tcp"
+
+
+async def test_read_only_mode_streams_from_the_scope_itself(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    await setup_direct(hass, monkeypatch)
+    assert await camera(hass, "wide").stream_source() == "rtsp://scope.test:554/ch1/stream0"
+    assert await camera(hass, "tele").stream_source() == "rtsp://scope.test:554/ch0/stream0"
+    assert await camera(hass, "wide").async_camera_image() is None, "no relay, so no still: the stream is the picture"
+
+
+async def test_the_tele_camera_has_a_still_through_the_relay_too(hass: HomeAssistant, aioclient_mock):
+    import base64
+
+    aioclient_mock.get(f"{BASE}/api/frame", json={"data": base64.b64encode(b"\xff\xd8tele").decode()})
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    assert await camera(hass, "tele").async_camera_image() == b"\xff\xd8tele"
+    asked = [c[1].query["camera"] for c in aioclient_mock.mock_calls if c[1].path == "/api/frame"]
+    assert asked == ["tele"]
+
+
+async def test_the_wide_camera_keeps_its_entity_id(hass: HomeAssistant, aioclient_mock):
+    from homeassistant.helpers import entity_registry as er
+
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    assert er.async_get(hass).async_get("camera.dwarf_3_wide_camera").unique_id == f"{entry.entry_id}_wide_camera"

@@ -21,3 +21,7 @@ MODE_DIRECT = "direct"
 DIRECT_DEFAULT_SCAN_INTERVAL = 60
 SCOPE_API_PORT = 8082
 ALBUM_ROOT = "/Astronomy"
+
+RTSP_PORT = 554
+# Where each camera's live video is on the scope.
+RTSP_PATHS = {"wide": "ch1/stream0", "tele": "ch0/stream0"}

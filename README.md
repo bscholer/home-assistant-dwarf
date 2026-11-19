@@ -35,10 +35,11 @@ relay**, enter your scope's IP address and start it. The integration finds it by
 |---|:-:|:-:|
 | Scope online, SD card free and used | ✔ | ✔ |
 | Capture sessions on the card | ✔ | ✔ |
+| Latest stack image, and every stack in Media | ✔ | ✔ |
 | Works with the DWARFLAB app | ✔ | ✔ (through the relay) |
 | Battery, temperatures, tracking | | ✔ |
 | Capture progress, "capture finished" event | | ✔ |
-| Wide camera | | ✔ |
+| Live wide and tele video | ✔ (plays while the app has the camera on) | ✔ |
 | Buttons and services (goto, capture, darks, move, point) | | ✔ |
 
 Without Home Assistant apps (Container or Core installs), run the relay yourself:
@@ -63,7 +64,7 @@ include what the scope reports about your Wi-Fi.
 
 - **Read-only:** scope online, SD card free, used and size, capture sessions.
 - **Full control adds:** capture state (idle, running, done, failed), capture progress, frames captured and failed, battery, body
-  and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide camera, and buttons for
+  and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide and tele cameras (live video and stills), and buttons for
   Prepare, Calibrate, Close barrel and Stop capture.
 - **Latest stack**, an image of the newest session's `stacked.jpg`, scaled to 1280 px wide. It refreshes every 30 s while a
   capture runs (if the scope rewrites the file as it stacks, it updates live) and every 10 minutes otherwise. Cast it to a smart
@@ -111,7 +112,10 @@ All take a DWARF 3 device as the target.
 - Anyone on your home network can control the scope through the relay, as they can without it. The relay app has an option to
   require an access token if you share your network.
 - The relay's status refreshes every 30 s (read-only: 60 s). Change it under **Configure**.
-- The tele camera is not offered: a frame can take over a minute.
+- Live video (wide and tele) is the scope's RTSP stream, played by Home Assistant. In full control it goes through the relay, which
+  forwards port 554 (so the relay needs the host network, as the app does). In read-only mode it comes straight from the scope, and
+  only plays while the DWARFLAB app has the camera running, since nothing here can Prepare. The scope only streams after **Prepare**.
+  The tele stream waits for a keyframe, so it can take up to about 40 s to start.
 - The brand images in `custom_components/dwarf3/brand/` belong to DWARFLAB, and this project is not affiliated with them.
   The MIT license covers the code.
 
