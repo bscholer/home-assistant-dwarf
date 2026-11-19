@@ -1,0 +1,24 @@
+name: Idea or request
+description: Something you'd like it to do.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: want
+    attributes:
+      label: What would you like to do?
+      description: Describe what you're trying to achieve, such as an automation or a dashboard, rather than how to build it.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Does it need Full control?
+      options:
+        - Not sure
+        - Works read-only too
+        - Needs Full control
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Links, screenshots, or how other apps do it.
