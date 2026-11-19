@@ -2,13 +2,15 @@
   "domain": "dwarf3",
   "name": "DWARF 3 Smart Telescope",
   "after_dependencies": [
-    "hassio"
+    "hassio",
+    "media_source"
   ],
   "codeowners": [
     "@bscholer"
   ],
   "config_flow": true,
   "dependencies": [
+    "http",
     "network"
   ],
   "dhcp": [

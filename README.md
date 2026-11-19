@@ -81,6 +81,9 @@ include what the scope reports about your Wi-Fi.
         media_content_type: image/jpeg
         media_content_id: media-source://image/image.dwarf_3_latest_stack
   ```
+- **Media browser:** every session on the scope that has a stack is listed under **Media → DWARF 3**, newest first, with a
+  thumbnail and a title like "M 81, 30 s, 2026-11-18 03:11" (the time is the scope's own clock). Play one on any display from there,
+  or in an automation with `media-source://dwarf3/<entry id>/<session folder name>`. It works in read-only mode too.
 - **Pitch and rotation** sensors, in degrees, like a PTZ camera's pan and tilt position. They are the scope's motor angles,
   not altitude and azimuth, because the mount is tilted. Pitch 172.5 is straight up and 0 is the closed barrel.
 - **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5.

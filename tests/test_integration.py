@@ -1077,3 +1077,166 @@ def test_a_small_image_is_not_resized():
     from custom_components.dwarf3.stack import downscale
 
     assert Image.open(io.BytesIO(downscale(make_jpeg(800, 400)))).width == 800
+
+
+# ---- browsing every stack in Home Assistant's Media
+
+BROKEN = "DWARF_RAW_TELE_M 31_EXP_15_GAIN_60_2026-11-19-01-00-00-000"  # a session that never produced a stack
+THUMB = b"\xff\xd8thumb"
+
+
+def library(monkeypatch, *, newest_jpeg=None, thumbs=True):
+    """The scope's album, as seen through the relay client. Returns a counter of the listings made."""
+    from custom_components.dwarf3.api import RelayClient
+
+    jpeg = newest_jpeg or make_jpeg()
+    stacks = {OLDER: make_jpeg(2000, 800), NEWEST: jpeg, BROKEN: None}
+    counter = {"listings": []}
+
+    async def sessions(self):
+        return list(stacks)
+
+    async def files(self, path):
+        counter["listings"].append(path)
+        have = stacks[path]
+        entries = [] if have is None else [{"name": "stacked.jpg", "size": len(have), "dir": False}]
+        if have is not None and thumbs:
+            entries.append({"name": "stacked_thumbnail.jpg", "size": len(THUMB), "dir": False})
+        return entries
+
+    async def download(self, path, size):
+        session, name = path.rsplit("/", 1)
+        return stacks[session] if name == "stacked.jpg" else THUMB
+
+    monkeypatch.setattr(RelayClient, "sessions", sessions)
+    monkeypatch.setattr(RelayClient, "files", files)
+    monkeypatch.setattr(RelayClient, "download", download)
+    return counter
+
+
+async def browse(hass, path=""):
+    from homeassistant.components import media_source
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, "media_source", {})
+    await hass.async_block_till_done()  # integrations register their sources in background tasks
+    return await media_source.async_browse_media(hass, f"media-source://dwarf3{path}")
+
+
+async def test_every_stack_shows_up_in_the_media_browser_newest_first(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    library(monkeypatch)
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    root = await browse(hass)
+    assert [c.title for c in root.children] == ["M 81, 30 s, 2026-11-18 03:11", "NGC 224, 30 s, 2026-11-17 21:06"]
+    assert all(c.can_play and not c.can_expand and c.media_content_type == "image/jpeg" for c in root.children)
+    assert root.children[0].media_content_id == f"media-source://dwarf3/{entry.entry_id}/{NEWEST}"
+    assert "authSig" in root.children[0].thumbnail, "thumbnails are signed, so the browser can load them"
+    assert BROKEN not in str([c.title for c in root.children]), "only sessions that have a stack"
+
+
+async def test_without_thumbnails_it_still_browses(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    library(monkeypatch, thumbs=False)
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    root = await browse(hass)
+    assert len(root.children) == 2 and root.children[0].thumbnail is None
+
+
+async def test_older_sessions_are_not_listed_twice(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    counter = library(monkeypatch)
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    await browse(hass)
+    counter["listings"].clear()
+    entry.runtime_data.library._listed = float("-inf")  # the cached listing has expired
+    await browse(hass)
+    assert counter["listings"] == [BROKEN], "only the newest session can still change"
+
+
+async def test_a_playable_address_serves_the_picture_and_is_signed(
+    hass: HomeAssistant, aioclient_mock, monkeypatch, hass_client, hass_client_no_auth
+):
+    import io
+    from datetime import timedelta
+
+    from homeassistant.components import media_source
+    from homeassistant.components.http.auth import async_sign_path
+    from homeassistant.setup import async_setup_component
+    from PIL import Image
+
+    library(monkeypatch)
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    assert await async_setup_component(hass, "media_source", {})
+    await hass.async_block_till_done()  # integrations register their sources in background tasks
+    play = await media_source.async_resolve_media(hass, f"media-source://dwarf3/{entry.entry_id}/{NEWEST}", None)
+    assert play.mime_type == "image/jpeg"
+
+    response = await (await hass_client()).get(play.url)
+    assert response.status == 200 and response.content_type == "image/jpeg"
+    assert Image.open(io.BytesIO(await response.read())).width == 1280
+
+    anonymous = await hass_client_no_auth()
+    assert (await anonymous.get(play.url)).status == 401, "not without a signature"
+    signed = async_sign_path(hass, play.url, timedelta(minutes=5))
+    assert (await anonymous.get(signed)).status == 200, "with the signature Home Assistant adds, a display can fetch it"
+
+
+async def test_the_thumbnail_is_served_as_it_is(hass: HomeAssistant, aioclient_mock, monkeypatch, hass_client):
+    from custom_components.dwarf3.media_source import stack_path
+
+    library(monkeypatch)
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    response = await (await hass_client()).get(stack_path(entry.entry_id, OLDER, thumbnail=True))
+    assert (response.status, await response.read()) == (200, THUMB)
+
+
+async def test_unknown_or_unsafe_addresses_are_not_found(hass: HomeAssistant, aioclient_mock, monkeypatch, hass_client):
+    from custom_components.dwarf3.media_source import stack_path
+
+    library(monkeypatch)
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    client = await hass_client()
+    assert (await client.get(stack_path("nope", NEWEST))).status == 404
+    assert (await client.get(stack_path(entry.entry_id, "something_else"))).status == 404
+    traversal = await client.get(f"/api/dwarf3/stack/{entry.entry_id}/DWARF_RAW_..%2F..%2Fetc")
+    assert traversal.status in (400, 404), "refused, either by the web server or by us"
+    assert (await client.get(stack_path(entry.entry_id, BROKEN))).status == 404, "a session with no stack"
+
+
+async def test_resolving_an_unknown_stack_fails_cleanly(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    import pytest
+    from homeassistant.components import media_source
+    from homeassistant.components.media_source import Unresolvable
+    from homeassistant.setup import async_setup_component
+
+    library(monkeypatch)
+    mock_relay(aioclient_mock)
+    await setup(hass)
+    assert await async_setup_component(hass, "media_source", {})
+    await hass.async_block_till_done()  # integrations register their sources in background tasks
+    with pytest.raises(Unresolvable):
+        await media_source.async_resolve_media(hass, "media-source://dwarf3/nope/DWARF_RAW_x", None)
+
+
+async def test_read_only_mode_browses_over_ftp(hass: HomeAssistant, aioclient_mock, monkeypatch, hass_client):
+    from custom_components.dwarf3.direct import ScopeDirectClient
+
+    jpeg = make_jpeg()
+    monkeypatch.setattr(ScopeDirectClient, "fetch_stack_blocking", lambda self, known: (NEWEST, len(jpeg), jpeg))
+    monkeypatch.setattr(
+        ScopeDirectClient,
+        "index_stacks_blocking",
+        lambda self, known: {OLDER: {"stack": 10, "thumb": 5}, NEWEST: {"stack": len(jpeg), "thumb": None}},
+    )
+    monkeypatch.setattr(ScopeDirectClient, "read_file_blocking", lambda self, session, name: jpeg)
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    root = await browse(hass)
+    assert [c.title for c in root.children][0].startswith("M 81")
+    from custom_components.dwarf3.media_source import stack_path
+
+    assert (await (await hass_client()).get(stack_path(entry.entry_id, NEWEST))).status == 200

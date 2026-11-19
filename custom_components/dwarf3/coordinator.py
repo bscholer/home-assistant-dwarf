@@ -16,7 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .api import RelayClient, RelayError, RelayUnauthorized, RelayUnreachable, ScopeError
 from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DIRECT_DEFAULT_SCAN_INTERVAL, DOMAIN
 from .direct import ScopeDirectClient, ScopeUnreachable
-from .stack import StackTracker
+from .stack import StackLibrary, StackTracker
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.relay_version: str | None = None
         self.platforms: list[Platform] = []  # what was set up, so a mode switch unloads the right ones
         self.stack: StackTracker | None = None
+        self.library: StackLibrary | None = None
         self.sessions = Dwarf3SessionsCoordinator(hass, entry, client)
 
     async def _async_update_data(self) -> dict[str, Any]:
@@ -89,6 +90,7 @@ class Dwarf3DirectCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.platforms: list[Platform] = []
         self.stack: StackTracker | None = None
+        self.library: StackLibrary | None = None
         self._sessions: list[str] | None = None
         self._sessions_at: float | None = None
         self._sessions_task: asyncio.Task[None] | None = None

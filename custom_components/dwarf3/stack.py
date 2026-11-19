@@ -7,6 +7,7 @@ newest session and compares the file's size, and only downloads when it changed.
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import re
@@ -18,7 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from .api import RelayClient, RelayError
-from .direct import STACK_FILE, ScopeDirectClient, ScopeUnreachable, session_order
+from .direct import STACK_FILE, THUMBNAIL_FILE, ScopeDirectClient, ScopeUnreachable, session_order
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,8 +63,15 @@ def downscale(raw: bytes, width: int = WIDTH) -> bytes:
     return out.getvalue()
 
 
+Index = dict[str, dict[str, int | None]]  # session -> {"stack": size or None, "thumb": size or None}
+
+
 class StackSource(Protocol):
     async def fetch(self, known: tuple[str, int] | None) -> tuple[str, int, bytes | None] | None: ...
+
+    async def index(self, known: Index) -> Index: ...
+
+    async def read(self, session: str, name: str) -> bytes: ...
 
 
 class RelayStackSource:
@@ -83,12 +91,40 @@ class RelayStackSource:
         return session, stack["size"], await self._client.download(f"{session}/{STACK_FILE}", stack["size"])
 
 
+    async def index(self, known: Index) -> Index:
+        sessions = await self._client.sessions()
+        newest = max(sessions, key=session_order, default=None)
+        todo = [name for name in sessions if name not in known or name == newest]
+        gate = asyncio.Semaphore(4)
+
+        async def look(name: str) -> tuple[str, dict[str, int | None]]:
+            async with gate:
+                sizes = {e["name"]: e["size"] for e in await self._client.files(name) if not e["dir"]}
+            return name, {"stack": sizes.get(STACK_FILE), "thumb": sizes.get(THUMBNAIL_FILE)}
+
+        found = dict(await asyncio.gather(*(look(name) for name in todo)))
+        return {name: found.get(name) or known[name] for name in sessions}
+
+    async def read(self, session: str, name: str) -> bytes:
+        entries = await self._client.files(session)
+        size = next((e["size"] for e in entries if e["name"] == name and not e["dir"]), None)
+        if size is None:
+            raise FileNotFoundError(name)
+        return await self._client.download(f"{session}/{name}", size)
+
+
 class DirectStackSource:
     def __init__(self, hass: HomeAssistant, client: ScopeDirectClient) -> None:
         self._hass, self._client = hass, client
 
     async def fetch(self, known: tuple[str, int] | None) -> tuple[str, int, bytes | None] | None:
         return await self._hass.async_add_executor_job(self._client.fetch_stack_blocking, known)
+
+    async def index(self, known: Index) -> Index:
+        return await self._hass.async_add_executor_job(self._client.index_stacks_blocking, known)
+
+    async def read(self, session: str, name: str) -> bytes:
+        return await self._hass.async_add_executor_job(self._client.read_file_blocking, session, name)
 
 
 class StackTracker:
@@ -132,3 +168,40 @@ class StackTracker:
             ))
         finally:
             self._busy = False
+
+
+class StackLibrary:
+    """Every session on the scope that has a stack, for the Media browser, and the pictures to show.
+
+    The listing is cached for a few minutes and older sessions are never listed twice, since they do not change.
+    """
+
+    LIST_FOR_S = 300
+    KEEP_IMAGES = 12
+
+    def __init__(self, hass: HomeAssistant, source: StackSource) -> None:
+        self.hass = hass
+        self._source = source
+        self._index: Index = {}
+        self._listed = float("-inf")
+        self._images: dict[tuple[str, bool], bytes] = {}
+
+    async def async_sessions(self) -> list[tuple[str, dict[str, int | None]]]:
+        """Sessions with a stack, newest first."""
+        if time.monotonic() - self._listed >= self.LIST_FOR_S:
+            self._index = await self._source.index(self._index)
+            self._listed = time.monotonic()
+        have = [(name, info) for name, info in self._index.items() if info.get("stack")]
+        return sorted(have, key=lambda item: session_order(item[0]), reverse=True)
+
+    async def async_image(self, session: str, thumbnail: bool = False) -> bytes:
+        """The stack (scaled to 1280 px) or its thumbnail. Raises FileNotFoundError when there is none."""
+        key = (session, thumbnail)
+        if key in self._images:
+            return self._images[key]
+        raw = await self._source.read(session, THUMBNAIL_FILE if thumbnail else STACK_FILE)
+        image = raw if thumbnail else await self.hass.async_add_executor_job(downscale, raw)
+        self._images[key] = image
+        while len(self._images) > self.KEEP_IMAGES:
+            self._images.pop(next(iter(self._images)))
+        return image

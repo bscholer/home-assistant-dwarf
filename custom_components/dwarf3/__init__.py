@@ -12,8 +12,9 @@ from .api import RelayClient, RelayError, RelayUnreachable
 from .const import CONF_MODE, CONF_TOKEN, DOMAIN, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator, Dwarf3DirectCoordinator
 from .direct import ScopeDirectClient
+from .media_source import StackView
 from .services import async_setup_services
-from .stack import DirectStackSource, RelayStackSource, StackTracker
+from .stack import DirectStackSource, RelayStackSource, StackLibrary, StackTracker
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -24,6 +25,7 @@ DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.IMAGE, Platform.SENSOR]
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async_setup_services(hass)
+    hass.http.register_view(StackView())
     return True
 
 
@@ -37,7 +39,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     if entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT:
         direct = Dwarf3DirectCoordinator(hass, entry, ScopeDirectClient(session, entry.data[CONF_HOST]))
         direct.data = {}
-        direct.stack = StackTracker(hass, DirectStackSource(hass, direct.client))
+        direct_source = DirectStackSource(hass, direct.client)
+        direct.stack = StackTracker(hass, direct_source)
+        direct.library = StackLibrary(hass, direct_source)
         direct.platforms = DIRECT_PLATFORMS
         entry.runtime_data = direct
         await hass.config_entries.async_forward_entry_setups(entry, DIRECT_PLATFORMS)
@@ -55,7 +59,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     coordinator = Dwarf3Coordinator(hass, entry, client)
     coordinator.relay_version = (capabilities.get("service") or {}).get("version")
     coordinator.data = {}
-    coordinator.stack = StackTracker(hass, RelayStackSource(client))
+    relay_source = RelayStackSource(client)
+    coordinator.stack = StackTracker(hass, relay_source)
+    coordinator.library = StackLibrary(hass, relay_source)
     coordinator.platforms = PLATFORMS
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

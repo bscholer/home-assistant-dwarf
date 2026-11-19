@@ -17,6 +17,7 @@ from .const import ALBUM_ROOT, SCOPE_API_PORT
 
 RAW_SESSION = re.compile(r"^DWARF_RAW_")
 STACK_FILE = "stacked.jpg"
+THUMBNAIL_FILE = "stacked_thumbnail.jpg"
 STAMP = re.compile(r"(\d{4}-\d\d-\d\d-\d\d-\d\d-\d\d-\d+)$")
 
 
@@ -85,6 +86,48 @@ class ScopeDirectClient:
             buffer = bytearray()
             ftp.retrbinary(f"RETR {ALBUM_ROOT}/{session}/{STACK_FILE}", buffer.extend)
             return session, size, bytes(buffer)
+        finally:
+            try:
+                ftp.quit()
+            except (ftplib.Error, OSError):
+                ftp.close()
+
+    def index_stacks_blocking(self, known: dict[str, dict[str, int | None]]) -> dict[str, dict[str, int | None]]:
+        """Which sessions have a stack, and the size of the stack and its thumbnail. Run it in an executor.
+
+        Older sessions never change, so only sessions not in `known`, and the newest, are listed.
+        """
+        ftp = ftplib.FTP(self.host, timeout=30)
+        try:
+            ftp.login()
+            names = sorted(
+                (n.rsplit("/", 1)[-1] for n in ftp.nlst(ALBUM_ROOT) if RAW_SESSION.match(n.rsplit("/", 1)[-1])),
+                key=session_order,
+            )
+            result: dict[str, dict[str, int | None]] = {}
+            for index, session in enumerate(names):
+                if session in known and index != len(names) - 1:
+                    result[session] = known[session]
+                    continue
+                lines: list[str] = []
+                ftp.dir(f"{ALBUM_ROOT}/{session}", lines.append)
+                sizes = {p[8]: int(p[4]) for p in (line.split(None, 8) for line in lines) if len(p) == 9}
+                result[session] = {"stack": sizes.get(STACK_FILE), "thumb": sizes.get(THUMBNAIL_FILE)}
+            return result
+        finally:
+            try:
+                ftp.quit()
+            except (ftplib.Error, OSError):
+                ftp.close()
+
+    def read_file_blocking(self, session: str, name: str) -> bytes:
+        """One file from a session folder, over FTP. Run it in an executor."""
+        ftp = ftplib.FTP(self.host, timeout=30)
+        try:
+            ftp.login()
+            buffer = bytearray()
+            ftp.retrbinary(f"RETR {ALBUM_ROOT}/{session}/{name}", buffer.extend)
+            return bytes(buffer)
         finally:
             try:
                 ftp.quit()
