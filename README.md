@@ -59,7 +59,8 @@ device_id: <optional, the first DWARF 3 is used when left out>
 theme: auto  # or light, dark. auto follows Home Assistant
 ```
 
-After an update, reload the page if the card looks old. The card uses the Barlow font (SIL Open Font License, in
+The integration keeps a copy of the card in `config/www/dwarf3`, so it loads even while Home Assistant is still
+starting. After an update, reload the page if the card looks old. The card uses the Barlow font (SIL Open Font License, in
 `frontend/fonts`).
 
 ## If something looks wrong
