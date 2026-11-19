@@ -1285,3 +1285,25 @@ async def test_the_wide_camera_keeps_its_entity_id(hass: HomeAssistant, aioclien
     mock_relay(aioclient_mock)
     entry = await setup(hass)
     assert er.async_get(hass).async_get("camera.dwarf_3_wide_camera").unique_id == f"{entry.entry_id}_wide_camera"
+
+
+async def test_a_refused_poll_keeps_the_last_reading(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch
+):
+    from custom_components.dwarf3 import coordinator as coordinator_module
+
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    assert hass.states.get("sensor.dwarf_3_battery").state == "87"
+
+    aioclient_mock.clear_requests()
+    refused = {"detail": "no app connection to carry the command", "code": "busy"}
+    mock_relay(aioclient_mock, status=refused, status_code=409)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.dwarf_3_battery").state == "87", "one refused poll is not an outage"
+
+    monkeypatch.setattr(coordinator_module, "GRACE_S", 0)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.dwarf_3_battery").state == "unavailable", "a long outage still shows"
