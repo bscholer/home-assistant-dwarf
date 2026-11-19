@@ -13,6 +13,7 @@ from .card import async_remove_card, async_setup_card
 from .const import CONF_MODE, CONF_TOKEN, DOMAIN, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator, Dwarf3DirectCoordinator
 from .direct import ScopeDirectClient
+from .live import follow_relay
 from .media_source import StackView
 from .services import async_setup_services
 from .stack import DirectStackSource, RelayStackSource, StackLibrary, StackTracker
@@ -69,6 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_reload))
     entry.async_create_background_task(hass, _first_read(coordinator), "dwarf3 first read")
+    entry.async_create_background_task(hass, follow_relay(coordinator), "dwarf3 live updates")
     return True
 
 

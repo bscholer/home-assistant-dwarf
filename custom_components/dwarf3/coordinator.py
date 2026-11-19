@@ -23,6 +23,11 @@ _LOGGER = logging.getLogger(__name__)
 type Dwarf3ConfigEntry = ConfigEntry[Dwarf3Coordinator]
 
 
+def _known(pushed: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
+    """The pushed values worth keeping. A missing reading must not wipe one we have, but no job means no job."""
+    return {k: v for k, v in pushed.items() if v is not None or k == "job" or k not in current}
+
+
 class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
     config_entry: Dwarf3ConfigEntry
 
@@ -40,17 +45,37 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.stack: StackTracker | None = None
         self.library: StackLibrary | None = None
         self.sessions = Dwarf3SessionsCoordinator(hass, entry, client)
+        # The last status the relay pushed, and whether we are listening to it right now.
+        self.live: dict[str, Any] = {}
+        self.live_connected = False
+
+    def apply_live(self, pushed: dict[str, Any]) -> None:
+        """Take a status the relay pushed. The poll's schedule is left alone, so it still reads the motors."""
+        previous = self.data or {}
+        self.live = pushed
+        merged = {**previous, **_known(pushed, previous)}
+        came_online = pushed.get("scope_reachable") and not previous.get("scope_reachable")
+        if merged != previous or not self.last_update_success:
+            self.data = merged
+            self.last_update_success = True
+            self.async_update_listeners()
+        if came_online:
+            # The relay sees the scope first. Read the motors and dark counts, which only a poll can do.
+            self.hass.async_create_task(self.async_request_refresh())
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
-            return await self.client.status()
+            polled = await self.client.status()
         except RelayUnauthorized as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except ScopeError:
-            # The relay is up and the scope is not (asleep, or off the network). Keep the relay entities.
-            return {"scope_reachable": False}
+            # The relay is up and the scope is not (asleep, or off the network, or still starting). Keep what the
+            # relay told us, and otherwise just say the scope is away.
+            return dict(self.live) if self.live_connected and self.live else {"scope_reachable": False}
         except RelayUnreachable as err:
             raise UpdateFailed(f"Relay did not answer: {err}") from err
+        # What was pushed is newer than what the poll read from the relay's memory a moment ago.
+        return {**polled, **_known(self.live, polled)} if self.live_connected else polled
 
 
 class Dwarf3SessionsCoordinator(DataUpdateCoordinator[list[str]]):
