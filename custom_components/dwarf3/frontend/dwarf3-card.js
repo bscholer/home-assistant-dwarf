@@ -8,7 +8,7 @@
  * The card finds its entities through the entity registry (translation keys), so renamed entities keep working.
  */
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 const DOMAIN = "dwarf3";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
@@ -67,6 +67,7 @@ const FILTERS = [
 const FRAME_PRESETS = [20, 50, 100, 200, 500];
 
 // J2000. ra in hours, dec in degrees. Names match how the scope labels sessions ("M 81", "NGC 1499").
+// Checked against OpenNGC: all within 15 arcmin, except two aimed on purpose to frame the whole target.
 const CATALOG = [
   ["M 31", "Andromeda Galaxy", "galaxy", 0.7123, 41.2692, 3.4, "NGC 224"],
   ["M 33", "Triangulum Galaxy", "galaxy", 1.5641, 30.6602, 5.7, "NGC 598"],
@@ -101,6 +102,7 @@ const CATALOG = [
   ["NGC 6888", "Crescent Nebula", "nebula", 20.2019, 38.355, 7.4, ""],
   ["NGC 1499", "California Nebula", "nebula", 4.055, 36.4217, 6.0, ""],
   ["IC 434", "Horsehead Nebula", "nebula", 5.6831, -2.4583, 6.8, "Barnard 33"],
+  // The centre of the ring, on the NGC 2244 cluster. OpenNGC puts NGC 2237 on the western lobe.
   ["NGC 2237", "Rosette Nebula", "nebula", 6.5625, 4.9983, 5.5, "NGC 2238 NGC 2244"],
   ["NGC 2264", "Cone Nebula", "nebula", 6.685, 9.8833, 3.9, "Christmas Tree"],
   ["IC 405", "Flaming Star Nebula", "nebula", 5.2681, 34.45, 6.0, ""],
@@ -125,6 +127,7 @@ const CATALOG = [
   ["M 35", "", "cluster", 6.1483, 24.3333, 5.3, "NGC 2168"],
   ["M 44", "Beehive Cluster", "cluster", 8.6733, 19.6667, 3.7, "Praesepe NGC 2632"],
   ["M 45", "Pleiades", "cluster", 3.79, 24.1167, 1.6, "Seven Sisters"],
+  // Between NGC 869 and NGC 884, so both fit.
   ["NGC 869", "Double Cluster", "cluster", 2.3333, 57.1333, 3.7, "NGC 884"],
 ].map(([id, name, type, ra, dec, mag, aka]) => ({ id, name, type, ra, dec, mag, aka }));
 
@@ -1171,7 +1174,7 @@ class Dwarf3Card extends HTMLElement {
         ${action("prepare", "mdi:power", "Prepare", "Wake after power on")}
         ${action("calibrate", "mdi:star-shooting-outline", "Calibrate", "Plate solve on stars")}
         ${action("pointUp", "mdi:arrow-up-bold-circle-outline", "Point up", "Straight to zenith")}
-        ${action("closeBarrel", "mdi:archive-arrow-down-outline", "Close barrel", "Park the arm")}
+        ${action("closeBarrel", "mdi:archive-arrow-down-outline", "Close barrel", "Turn it to stow")}
       </div>
 
       <div class="section-head"><span>Nudge</span></div>
@@ -1203,7 +1206,7 @@ class Dwarf3Card extends HTMLElement {
       b.addEventListener("click", () => {
         const role = b.dataset.press;
         if (role === "closeBarrel")
-          this._confirm("Close the barrel? The arm folds down and any capture stops.", () =>
+          this._confirm("Close the barrel? It turns to its stowed position and any capture stops.", () =>
             this._press(role, "Closing the barrel"),
           );
         else this._press(role, `${b.querySelector("b").textContent}…`);
