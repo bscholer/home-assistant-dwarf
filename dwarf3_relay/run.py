@@ -5,35 +5,17 @@ import os
 import secrets
 import sys
 import urllib.request
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-options = json.loads(Path("/data/options.json").read_text())
-host = (options.get("scope_host") or "").strip()
-if not host:
-    sys.exit("Enter your scope's IP address under Configuration > Telescope IP address, then start the app again.")
-
-env = os.environ
-env["DWARF3_HOST"] = host
-
-if not options.get("auth", False):
-    env["DWARF3_AUTH"] = "off"
-else:
-    token = (options.get("api_token") or "").strip()
-    if not token:
-        saved = Path("/data/api-token")
-        if not saved.exists():
-            saved.write_text(secrets.token_urlsafe(32))
-            saved.chmod(0o600)
-        token = saved.read_text().strip()
-        print(f"Your access token is: {token}", flush=True)
-    env["DWARF3_API_TOKEN"] = token
+DATA_DIR = Path("/data")
 
 
-def home_assistant_site() -> tuple[str, str, str] | None:
+def home_assistant_site(environ: Mapping[str, str]) -> tuple[str, str, str] | None:
     """This Home Assistant's latitude, longitude and time zone, for the Prepare button."""
-    supervisor = env.get("SUPERVISOR_TOKEN")
+    supervisor = environ.get("SUPERVISOR_TOKEN")
     if not supervisor:
         return None
     request = urllib.request.Request(
@@ -47,21 +29,68 @@ def home_assistant_site() -> tuple[str, str, str] | None:
         return None
 
 
-site = None
-if options.get("latitude") and options.get("longitude") and options.get("timezone"):
-    site = (options["latitude"], options["longitude"], options["timezone"])
-else:
-    site = home_assistant_site()
-if site:
-    lat, lon, zone = site
-    env["DWARF3_LAT"], env["DWARF3_LON"], env["DWARF3_TZ"] = lat, lon, zone
-    env["DWARF3_UTC_OFFSET"] = str(datetime.now(ZoneInfo(zone)).utcoffset().total_seconds() / 3600)
-else:
-    print("No site location found, so the Prepare button will not work. Set one in Configuration.", flush=True)
+def plan(
+    options: Mapping[str, object],
+    environ: Mapping[str, str],
+    data_dir: Path = DATA_DIR,
+    fetch_site: Callable[[Mapping[str, str]], tuple[str, str, str] | None] = home_assistant_site,
+) -> tuple[dict[str, str], list[str]]:
+    """Work out the relay's environment from the app options. Returns (environment, messages for the log).
 
-print(
-    "The relay is starting. In Home Assistant, add the DWARF 3 integration and choose Full control. "
-    "In the DWARFLAB app, enter this Home Assistant's IP address as the scope.",
-    flush=True,
-)
-os.execvp("dwarf3", ["dwarf3", "proxy", "--log-dir", "/data"])
+    Exits with a message when the scope's address is missing.
+    """
+    host = str(options.get("scope_host") or "").strip()
+    if not host:
+        sys.exit(
+            "Enter your scope's IP address under Configuration > Telescope IP address, then start the app again."
+        )
+    env: dict[str, str] = {"DWARF3_HOST": host}
+    messages: list[str] = []
+
+    if not options.get("auth", False):
+        env["DWARF3_AUTH"] = "off"
+    else:
+        env["DWARF3_AUTH"] = "on"
+        token = str(options.get("api_token") or "").strip()
+        if not token:
+            saved = data_dir / "api-token"
+            if not saved.exists():
+                saved.write_text(secrets.token_urlsafe(32))
+                saved.chmod(0o600)
+            token = saved.read_text().strip()
+            messages.append(f"Your access token is: {token}")
+        env["DWARF3_API_TOKEN"] = token
+
+    if options.get("latitude") and options.get("longitude") and options.get("timezone"):
+        site: tuple[str, str, str] | None = (
+            str(options["latitude"]),
+            str(options["longitude"]),
+            str(options["timezone"]),
+        )
+    else:
+        site = fetch_site(environ)
+    if site:
+        lat, lon, zone = site
+        env["DWARF3_LAT"], env["DWARF3_LON"], env["DWARF3_TZ"] = lat, lon, zone
+        env["DWARF3_UTC_OFFSET"] = str(datetime.now(ZoneInfo(zone)).utcoffset().total_seconds() / 3600)
+    else:
+        messages.append("No site location found, so the Prepare button will not work. Set one in Configuration.")
+
+    messages.append(
+        "The relay is starting. In Home Assistant, add the DWARF 3 integration and choose Full control. "
+        "In the DWARFLAB app, enter this Home Assistant's IP address as the scope."
+    )
+    return env, messages
+
+
+def main() -> None:
+    options = json.loads((DATA_DIR / "options.json").read_text())
+    env, messages = plan(options, os.environ)
+    os.environ.update(env)
+    for message in messages:
+        print(message, flush=True)
+    os.execvp("dwarf3", ["dwarf3", "proxy", "--log-dir", str(DATA_DIR)])
+
+
+if __name__ == "__main__":
+    main()

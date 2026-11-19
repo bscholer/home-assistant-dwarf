@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install
+        run: |
+          uv venv --python 3.13
+          uv pip install pytest-homeassistant-custom-component PyTurboJPEG av numpy ruff
+      - run: .venv/bin/ruff check .
+      - run: .venv/bin/python -m pytest -q
+
+  app-lint:
+    name: Relay app config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: frenck/action-addon-linter@v2
+        with:
+          path: ./dwarf3_relay
+
+  app-smoke:
+    name: Relay app builds and starts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t relay-app dwarf3_relay
+      - name: Start it the way Home Assistant does
+        run: |
+          mkdir data
+          echo '{"scope_host":"192.0.2.10","auth":false,"api_token":"","latitude":"","longitude":"","timezone":""}' > data/options.json
+          docker run -d --name relay -v "$PWD/data:/data" relay-app
+          sleep 15
+          docker logs relay | tee out.txt
+          grep -q "The relay is starting" out.txt
+          test "$(docker inspect -f '{{.State.Running}}' relay)" = "true"

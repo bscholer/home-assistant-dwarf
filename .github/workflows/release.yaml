@@ -1,0 +1,27 @@
+# Push a tag like v0.5.0 to publish a release. HACS lists an integration only when it has a full GitHub release.
+# Bump "version" in custom_components/dwarf3/manifest.json first. The tag has to match it.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag matches the manifest version
+        run: |
+          version="$(jq -r .version custom_components/dwarf3/manifest.json)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version $version" >&2
+            exit 1
+          fi
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
