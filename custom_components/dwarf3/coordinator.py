@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 from typing import Any
 
@@ -13,12 +14,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import RelayClient, RelayError, RelayUnauthorized, RelayUnreachable, ScopeError
+from .api import RelayBusy, RelayClient, RelayError, RelayUnauthorized, RelayUnreachable, ScopeError
 from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DIRECT_DEFAULT_SCAN_INTERVAL, DOMAIN
 from .direct import ScopeDirectClient, ScopeUnreachable
 from .stack import StackLibrary, StackTracker
 
 _LOGGER = logging.getLogger(__name__)
+
+# The relay refuses a poll now and then (the DWARFLAB app dropping its connection mid-read, a Wi-Fi blip). Keep
+# the last reading through that rather than turning every entity unavailable for one poll.
+GRACE_S = 90
 
 type Dwarf3ConfigEntry = ConfigEntry[Dwarf3Coordinator]
 
@@ -40,17 +45,25 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.stack: StackTracker | None = None
         self.library: StackLibrary | None = None
         self.sessions = Dwarf3SessionsCoordinator(hass, entry, client)
+        self._last_ok = float("-inf")
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
-            return await self.client.status()
+            data = await self.client.status()
         except RelayUnauthorized as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except ScopeError:
             # The relay is up and the scope is not (asleep, or off the network). Keep the relay entities.
             return {"scope_reachable": False}
-        except RelayUnreachable as err:
+        except (RelayBusy, RelayUnreachable) as err:
+            if self.data and time.monotonic() - self._last_ok < GRACE_S:
+                _LOGGER.debug("Keeping the last reading through a failed poll: %s", err)
+                return self.data
             raise UpdateFailed(f"Relay did not answer: {err}") from err
+        except RelayError as err:
+            raise UpdateFailed(str(err)) from err
+        self._last_ok = time.monotonic()
+        return data
 
 
 class Dwarf3SessionsCoordinator(DataUpdateCoordinator[list[str]]):
