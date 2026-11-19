@@ -1,7 +1,17 @@
 # DWARF 3 for Home Assistant
 
-See your DWARF 3 in Home Assistant: SD card, capture progress, battery, temperatures, a camera, and controls for
-automations. Start read-only in a minute, and add full control later if you want it.
+Run your DWARF 3 from Home Assistant: live video, a joystick, goto and capture on a dashboard card, plus battery,
+temperatures, capture progress and your finished stacks for automations. Start read-only in a minute, and add full control
+later if you want it.
+
+![The DWARF 3 dashboard card](docs/images/card.png)
+
+- **Dashboard card** with live wide and tele video, joystick, capture, goto and a gallery of your stacks.
+- **Sensors and events** for battery, temperatures, SD card, capture progress and "capture finished", to build automations on.
+- **Your stacks in Home Assistant**: browse them in Media, or cast the latest one to a smart display.
+- **Works alongside the DWARFLAB app**, in read-only mode or through a small relay that Home Assistant installs for you.
+
+Built and tested with one DWARF 3. It is an independent project and not affiliated with DWARFLAB.
 
 ## Get started
 
@@ -48,10 +58,16 @@ then choose **Full control** and enter that machine's address.
 
 ## Dashboard card
 
-The integration installs a **DWARF 3** card for you. Edit a dashboard, choose **Add card** and search for DWARF 3. It
-has the live view with a joystick, a shutter button with capture settings, goto with a list of targets and their height in
-your sky, a gallery of the stacks on the SD card, and the device controls. In a panel view it fills the screen: the controls sit beside the live view on a desktop or a landscape tablet, and below it
-on a portrait tablet or a phone.
+The integration installs a **DWARF 3** card for you. Edit a dashboard, choose **Add card** and search for DWARF 3. Use it in a
+panel view to fill the screen: the controls sit beside the live view on a desktop or a landscape tablet, and below it on a
+portrait tablet or a phone.
+
+| Live view and joystick | Goto | Gallery |
+|---|---|---|
+| ![Live view](docs/images/card-live.png) | ![Goto](docs/images/card-goto.png) | ![Gallery](docs/images/card-gallery.png) |
+
+It has the live view with a joystick, a shutter button with capture settings, goto with a list of targets and their height in
+your sky, a gallery of the stacks on the SD card, and the device controls. Most of it needs **Full control**.
 
 ```yaml
 type: custom:dwarf3-card
@@ -59,9 +75,9 @@ device_id: <optional, the first DWARF 3 is used when left out>
 theme: auto  # or light, dark. auto follows Home Assistant
 ```
 
-The integration keeps a copy of the card in `config/www/dwarf3`, so it loads even while Home Assistant is still
-starting. After an update, reload the page if the card looks old. The card uses the Barlow font (SIL Open Font License, in
-`frontend/fonts`).
+The integration keeps a copy of the card in `config/www/dwarf3` and adds it to your dashboard resources, so it loads even
+while Home Assistant is still starting. It removes both when you delete the last DWARF 3. After an update, reload the page if the
+card looks old. The card uses the Barlow font (SIL Open Font License, in `frontend/fonts`).
 
 ## If something looks wrong
 
@@ -74,8 +90,9 @@ starting. After an update, reload the page if the card looks old. The card uses 
 | Battery shows "unknown" | It appears about a minute after the scope connects to the relay. |
 | The DWARFLAB app can't find the scope | With the relay, enter your Home Assistant's IP address in the app, not the scope's. |
 
-Something else? **⋮ → Download diagnostics** on the device, then open an issue. Diagnostics hide your address and never
-include what the scope reports about your Wi-Fi.
+Something else? Open an [issue](https://github.com/bscholer/home-assistant-dwarf3/issues/new/choose) and attach
+**⋮ → Download diagnostics** from the device. Diagnostics hide your address and never include what the scope reports about
+your Wi-Fi.
 
 ## Entities
 
@@ -107,11 +124,6 @@ include what the scope reports about your Wi-Fi.
 - **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5.
   Close barrel is the park position. There are no pitch or rotation sliders, on purpose: they would be too easy to hit by
   accident. For an exact position use `dwarf3.point`.
-- **Pitch and rotation** sensors, in degrees, like a PTZ camera's pan and tilt position. They are the scope's motor angles,
-  not altitude and azimuth, because the mount is tilted. 172.5 pitch is straight up and 0 is the closed barrel.
-- **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5.
-  Close barrel is the park position. There are no pitch or rotation sliders, on purpose: they would be too easy to hit by
-  accident. For exact positions use `dwarf3.point`.
 
 ## Services (full control)
 
