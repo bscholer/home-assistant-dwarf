@@ -143,6 +143,15 @@ class StackTracker:
         self._listeners.append(listener)
         return lambda: self._listeners.remove(listener)
 
+    def forget(self, session: str) -> None:
+        """A session was deleted. Stop showing it, so the next check picks the newest one left (or nothing)."""
+        if session != self.session:
+            return
+        self.session, self.size, self.jpeg, self.updated = None, None, None, dt_util.utcnow()
+        self.last_check = float("-inf")
+        for listener in list(self._listeners):
+            listener()
+
     def due(self, running: bool) -> bool:
         wait = RUNNING_EVERY_S if running else IDLE_EVERY_S
         return not self._busy and time.monotonic() - self.last_check >= wait
@@ -193,6 +202,12 @@ class StackLibrary:
             self._listed = time.monotonic()
         have = [(name, info) for name, info in self._index.items() if info.get("stack")]
         return sorted(have, key=lambda item: session_order(item[0]), reverse=True)
+
+    def forget(self, session: str) -> None:
+        """A session was deleted: drop it from the listing and the picture cache."""
+        self._index.pop(session, None)
+        for key in [k for k in self._images if k[0] == session]:
+            del self._images[key]
 
     async def async_image(self, session: str, thumbnail: bool = False) -> bytes:
         """The stack (scaled to 1280 px) or its thumbnail. Raises FileNotFoundError when there is none."""
