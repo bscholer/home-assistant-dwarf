@@ -50,14 +50,17 @@ then choose **Full control** and enter that machine's address.
 
 The integration installs a **DWARF 3** card for you. Edit a dashboard, choose **Add card** and search for DWARF 3. It
 has the live view with a joystick, a shutter button with capture settings, goto with a list of targets and their height in
-your sky, a gallery of the stacks on the SD card, and the device controls. A panel view gives it the whole screen.
+your sky, a gallery of the stacks on the SD card, and the device controls. In a panel view it fills the screen: the controls sit beside the live view on a desktop or a landscape tablet, and below it
+on a portrait tablet or a phone.
 
 ```yaml
 type: custom:dwarf3-card
 device_id: <optional, the first DWARF 3 is used when left out>
+theme: auto  # or light, dark. auto follows Home Assistant
 ```
 
-After an update, reload the page if the card looks old.
+After an update, reload the page if the card looks old. The card uses the Barlow font (SIL Open Font License, in
+`frontend/fonts`).
 
 ## If something looks wrong
 

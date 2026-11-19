@@ -45,3 +45,11 @@ async def test_card_is_removed(hass: HomeAssistant):
     await async_setup_card(hass)
     await async_remove_card(hass)
     assert _ours(resources) == []
+
+
+def test_card_fonts_ship_with_the_card():
+    from custom_components.dwarf3.card import FRONTEND_DIR
+
+    for weight in (400, 500, 600, 700):
+        assert (FRONTEND_DIR / "fonts" / f"barlow-{weight}.woff2").stat().st_size > 1000
+    assert (FRONTEND_DIR / "fonts" / "OFL.txt").exists()

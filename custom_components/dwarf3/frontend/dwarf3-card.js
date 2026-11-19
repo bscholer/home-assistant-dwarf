@@ -3,11 +3,12 @@
  *
  *   type: custom:dwarf3-card
  *   device_id: <optional, the first DWARF 3 is used when left out>
+ *   theme: auto | light | dark   (auto follows Home Assistant)
  *
  * The card finds its entities through the entity registry (translation keys), so renamed entities keep working.
  */
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const DOMAIN = "dwarf3";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
@@ -41,6 +42,21 @@ const ROLES = {
   sessions: "sessions",
   relay_version: "relayVersion",
 };
+
+// Barlow (SIL OFL, frontend/fonts/OFL.txt), served by the integration next to this file. @font-face does not work
+// inside a shadow root, so it goes in the document once.
+const FONT_BASE = import.meta.url.startsWith("data:") ? "/dwarf3_frontend/fonts/" : new URL("fonts/", import.meta.url).href;
+if (!document.getElementById("dwarf3-card-fonts")) {
+  const style = document.createElement("style");
+  style.id = "dwarf3-card-fonts";
+  style.textContent = [400, 500, 600, 700]
+    .map(
+      (w) => `@font-face { font-family: "DWARF3 Barlow"; font-style: normal; font-weight: ${w}; font-display: swap;
+        src: url("${FONT_BASE}barlow-${w}.woff2") format("woff2"); }`,
+    )
+    .join("\n");
+  document.head.appendChild(style);
+}
 
 const EXPOSURES = ["15", "30", "60"];
 const FILTERS = [
@@ -205,6 +221,25 @@ const esc = (s) =>
 
 const icon = (name, cls = "") => `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
 
+// Line icons for the status bar and HUD, drawn to one grid so they sit together.
+const GLYPHS = {
+  thermo: `<path d="M10 13.6V5a2 2 0 1 1 4 0v8.6a4 4 0 1 1-4 0Z"/><path d="M12 9v6.5"/><circle cx="12" cy="17" r="1.6" fill="currentColor" stroke="none"/>`,
+  sd: `<path d="M8.5 3H17a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V8.5Z"/><path d="M10 3v3.5M12.5 3v3.5M15 3v3.5"/>`,
+  moon: `<path d="M19.5 14.6A7.5 7.5 0 0 1 9.4 4.5a7.5 7.5 0 1 0 10.1 10.1Z"/><path d="M16.5 3.5v3M15 5h3" stroke-width="1.4"/>`,
+  dusk: `<path d="M3 17h18M7 17a5 5 0 0 1 10 0"/><path d="M12 6.5v2.5M5.4 9.9l1.7 1.7M18.6 9.9l-1.7 1.7M8 21h8"/>`,
+  sun: `<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>`,
+  eye: `<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/>`,
+  pitch: `<path d="M4 19h16M4 19 15.5 7.5"/><path d="M10 19a6 6 0 0 0-1.8-4.3"/>`,
+  rotate: `<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4.5h-4.5"/>`,
+};
+const glyph = (name) =>
+  `<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${GLYPHS[name]}</svg>`;
+// A battery that fills to the charge level.
+const batteryGlyph = () =>
+  `<svg class="glyph battery" viewBox="0 0 28 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round">
+    <rect x="2" y="6.5" width="21" height="11" rx="3"/><path d="M25.5 10.2v3.6" stroke-linecap="round" stroke-width="2.2"/>
+    <rect class="level" x="4.4" y="8.9" height="6.2" rx="1.4" width="0" fill="currentColor" stroke="none"/></svg>`;
+
 // ---------- the card ----------
 
 class Dwarf3Card extends HTMLElement {
@@ -257,12 +292,33 @@ class Dwarf3Card extends HTMLElement {
   connectedCallback() {
     this._clock = setInterval(() => this._tick(), 60000);
     this._pipTimer = setInterval(() => this._refreshPip(), 15000);
+    this._onResize = () => this._layout();
+    window.addEventListener("resize", this._onResize);
+    this._resizeObserver = new ResizeObserver(this._onResize);
+    this._resizeObserver.observe(this);
   }
 
   disconnectedCallback() {
     clearInterval(this._clock);
     clearInterval(this._pipTimer);
+    window.removeEventListener("resize", this._onResize);
+    this._resizeObserver?.disconnect();
     this._stopJoystick();
+  }
+
+  // Three layouts. Wide: stage and a side dock, filling the screen (desktop, landscape tablet). Tall: stage over the
+  // dock, filling the screen (portrait tablet). Phone: stage over the dock, scrolling with the page.
+  _layout() {
+    const card = this.$("card");
+    if (!card) return;
+    const width = this.clientWidth;
+    if (!width) return;
+    // The card sits under the dashboard header; fill from there to the bottom of the window.
+    const top = Math.max(0, Math.min(this.getBoundingClientRect().top, 200));
+    const avail = Math.max(520, window.innerHeight - top - 8);
+    const mode = width < 600 ? "phone" : width >= 900 || (width >= 700 && width / avail >= 1.15) ? "wide" : "tall";
+    for (const m of ["wide", "tall", "phone"]) card.classList.toggle(`layout-${m}`, m === mode);
+    card.style.height = mode === "phone" ? "" : `${avail}px`;
   }
 
   // ----- entity discovery -----
@@ -395,10 +451,10 @@ class Dwarf3Card extends HTMLElement {
             </div>
             <div class="stats">
               <span class="stat" id="stat-sky" title="Sun altitude"></span>
-              <span class="stat" id="stat-temp" title="Body temperature">${icon("mdi:thermometer")}<b></b></span>
-              <span class="stat" id="stat-sd" title="SD card free">${icon("mdi:micro-sd")}<b></b></span>
-              <span class="stat" id="stat-batt" title="Battery">${icon("mdi:battery")}<b></b></span>
-              <button class="icon-btn" id="night-btn" title="Night vision">${icon("mdi:eye-circle-outline")}</button>
+              <span class="stat" id="stat-temp" title="Body temperature">${glyph("thermo")}<b></b></span>
+              <span class="stat" id="stat-sd" title="SD card free">${glyph("sd")}<b></b></span>
+              <span class="stat" id="stat-batt" title="Battery">${batteryGlyph()}<b></b></span>
+              <button class="icon-btn" id="night-btn" title="Night vision">${glyph("eye")}</button>
             </div>
           </header>
 
@@ -417,8 +473,8 @@ class Dwarf3Card extends HTMLElement {
             <div class="hud" id="hud">
               <div class="hud-target" id="hud-target"></div>
               <div class="hud-row">
-                <span>${icon("mdi:angle-acute")}<b id="hud-pitch">—</b></span>
-                <span>${icon("mdi:rotate-360")}<b id="hud-rot">—</b></span>
+                <span title="Pitch">${glyph("pitch")}<b id="hud-pitch">—</b></span>
+                <span title="Rotation">${glyph("rotate")}<b id="hud-rot">—</b></span>
                 <span id="hud-track"></span>
               </div>
             </div>
@@ -490,6 +546,8 @@ class Dwarf3Card extends HTMLElement {
     this._wire();
     this._renderViewport();
     this._renderPanel();
+    this._layout();
+    requestAnimationFrame(() => this._layout());
   }
 
   _wire() {
@@ -1162,6 +1220,10 @@ class Dwarf3Card extends HTMLElement {
     const running = this._capturing();
     const elsewhere = this._val("busyElsewhere") === "on";
 
+    const theme = this._config.theme || "auto";
+    const dark = theme === "dark" || (theme !== "light" && this._hass.themes?.darkMode !== false);
+    $("card").classList.toggle("light", !dark);
+
     $("online-dot").className = `dot ${online ? "on" : "off"}`;
     const pill = $("state-pill");
     const [pillText, pillCls] = !online
@@ -1182,15 +1244,13 @@ class Dwarf3Card extends HTMLElement {
     const sunAlt = altAz(sun.ra, sun.dec, lat, lon).alt;
     const phase = skyPhase(sunAlt);
     $("stat-sky").className = `stat sky ${phase.cls}`;
-    $("stat-sky").innerHTML = `${icon(sunAlt > -6 ? "mdi:weather-sunny" : "mdi:weather-night")}<b>${phase.label}</b>`;
+    $("stat-sky").innerHTML = `${glyph(sunAlt > 0 ? "sun" : sunAlt > -12 ? "dusk" : "moon")}<b>${phase.label}</b>`;
 
     const batt = this._num("battery");
     $("stat-batt").querySelector("b").textContent = batt === null ? "—" : `${batt.toFixed(0)}%`;
-    $("stat-batt").querySelector("ha-icon").setAttribute(
-      "icon",
-      batt === null ? "mdi:battery-unknown" : `mdi:battery${batt >= 95 ? "" : `-${Math.max(10, Math.round(batt / 10) * 10)}`}`,
-    );
+    $("stat-batt").querySelector(".level").setAttribute("width", batt === null ? 0 : (16.2 * Math.max(4, Math.min(100, batt))) / 100);
     $("stat-batt").classList.toggle("low", batt !== null && batt < 20);
+    $("stat-batt").classList.toggle("mid", batt !== null && batt >= 20 && batt < 40);
     $("stat-temp").querySelector("b").textContent = this._fmt("bodyTemp");
     $("stat-sd").querySelector("b").textContent = this._fmt("sdFree", 0);
 
@@ -1293,37 +1353,77 @@ const STYLES = `
   --d-warn: #ffc24b;
   --d-bad: #ff4d5e;
   --d-radius: 18px;
+  --d-top: linear-gradient(180deg, #0d0f14, #0a0b0f);
+  --d-seg-on: #171a21;
+  --d-seg-shadow: inset 0 0 0 1px rgba(255,107,53,.5);
+  --d-shadow: none;
+  --d-scroll: #333;
+  --d-toast: #20242d;
+  --d-danger-text: #ff8b96;
+  --d-on-accent: #160a03;
   display: block;
   container-type: inline-size;
 }
 * { box-sizing: border-box; }
 ha-card {
+  display: block;
   background: var(--d-bg);
   color: var(--d-text);
   border-radius: var(--ha-card-border-radius, 20px);
   overflow: hidden;
   position: relative;
   border: 1px solid var(--d-line);
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "DWARF3 Barlow", Barlow, Bahnschrift, "DIN Alternate", "Avenir Next", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+/* Light: the dock and top bar go light. The stage and the photo overlays stay dark, like a camera app. */
+ha-card.light {
+  --d-bg: #f3f4f7;
+  --d-panel: #ffffff;
+  --d-raise: #eceef2;
+  --d-line: rgba(15,20,30,.09);
+  --d-text: #141720;
+  --d-mute: #5f6675;
+  --d-accent: #ec5a1f;
+  --d-accent-2: #ff9a3c;
+  --d-ok: #0f9b67;
+  --d-warn: #b07800;
+  --d-bad: #dc3545;
+  --d-top: #ffffff;
+  --d-seg-on: #ffffff;
+  --d-seg-shadow: 0 1px 3px rgba(15,20,30,.14), inset 0 0 0 1px rgba(236,90,31,.55);
+  --d-shadow: 0 1px 2px rgba(15,20,30,.05);
+  --d-scroll: #c8ccd4;
+  --d-toast: #ffffff;
+  --d-danger-text: #c82333;
+}
+.stage, .lightbox {
+  --d-bg: #07080b; --d-panel: #0f1116; --d-raise: #171a21; --d-line: rgba(255,255,255,.08);
+  --d-text: #eef0f4; --d-mute: #a3a9b5; --d-ok: #3ddc97; --d-warn: #ffc24b; --d-bad: #ff4d5e;
+  --d-accent: #ff6b35; --d-accent-2: #ffb347; --d-danger-text: #ff8b96;
+  color: var(--d-text);
+}
+ha-card.light .stage .banner { box-shadow: 0 12px 40px rgba(0,0,0,.4); }
 ha-card.night { filter: grayscale(1) sepia(1) saturate(6) hue-rotate(-40deg) brightness(.75); }
 ha-card.empty { display:flex; gap:12px; align-items:center; padding:24px; color: var(--d-mute); }
 ha-icon { --mdc-icon-size: 18px; display:inline-flex; }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; -webkit-tap-highlight-color: transparent; }
 button:disabled { opacity: .4; cursor: not-allowed; }
 
-.shell { display: grid; grid-template-columns: 1fr; grid-template-areas: "top" "stage" "dock"; }
-@container (min-width: 900px) {
-  .shell { grid-template-columns: 1fr 380px; grid-template-areas: "top top" "stage dock"; grid-template-rows: auto minmax(0, 1fr); height: min(82vh, 820px); }
-  .stage { aspect-ratio: auto !important; height: 100%; }
-  .dock { border-left: 1px solid var(--d-line); border-top: 0 !important; min-height: 0; }
-  .panel { max-height: none !important; }
-}
+.shell { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "top" "stage" "dock"; height: 100%; }
+.layout-wide .shell { grid-template-columns: minmax(0, 1fr) clamp(360px, 30%, 440px); grid-template-areas: "top top" "stage dock"; grid-template-rows: auto minmax(0, 1fr); }
+.layout-wide .stage, .layout-tall .stage { aspect-ratio: auto; height: 100%; min-height: 0; }
+.layout-wide .dock { border-left: 1px solid var(--d-line); border-top: 0; min-height: 0; }
+.layout-tall .shell { grid-template-rows: auto minmax(0, 1.15fr) minmax(0, 1fr); }
+.layout-tall .dock { min-height: 0; }
+.layout-wide .panel, .layout-tall .panel { max-height: none; min-height: 0; }
+.layout-tall .panel { padding: 16px 20px; }
+.layout-tall .tabs { padding: 8px 14px; }
+.layout-phone .panel { max-height: none; overflow: visible; }
 
 /* top bar */
 .topbar { grid-area: top; display:flex; align-items:center; justify-content:space-between; gap:12px;
-  padding: 10px 14px; background: linear-gradient(180deg, #0d0f14, #0a0b0f); border-bottom: 1px solid var(--d-line); }
+  padding: 10px 14px; background: var(--d-top); border-bottom: 1px solid var(--d-line); }
 .brand { display:flex; align-items:center; gap:10px; min-width:0; }
 .brand .name { font-weight: 650; letter-spacing: .02em; white-space: nowrap; }
 .dot { width:8px; height:8px; border-radius:50%; background: var(--d-mute); flex: none; }
@@ -1336,12 +1436,19 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .pill.rec { color: #fff; background: var(--d-bad); animation: pulse 1.6s infinite; }
 .pill.off { color: var(--d-bad); background: rgba(255,77,94,.1); }
 .stats { display:flex; align-items:center; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
-.stat { display:inline-flex; align-items:center; gap:5px; font-size: 13px; color: var(--d-mute); padding: 4px 8px; border-radius: 10px; background: var(--d-panel); white-space: nowrap; }
+.stat { display:inline-flex; align-items:center; gap:5px; font-size: 13px; color: var(--d-mute); padding: 4px 8px; border-radius: 10px; background: var(--d-raise); white-space: nowrap; }
 .stat b { color: var(--d-text); font-weight: 600; font-variant-numeric: tabular-nums; }
-.stat.low ha-icon, .stat.low b { color: var(--d-bad); }
-.stat.sky.dark ha-icon { color: #8fa8ff; } .stat.sky.dusk ha-icon { color: #b48cff; }
-.stat.sky.twilight ha-icon { color: var(--d-accent-2); } .stat.sky.day ha-icon { color: var(--d-warn); }
+.glyph { width: 18px; height: 18px; flex: none; }
+.glyph.battery { width: 23px; }
+.stat .glyph { color: var(--d-mute); }
+.stat#stat-batt .glyph { color: var(--d-ok); }
+.stat.mid#stat-batt .glyph { color: var(--d-warn); }
+.stat.low .glyph, .stat.low b { color: var(--d-bad); }
+.stat.sky.dark .glyph { color: #7d95ff; } .stat.sky.dusk .glyph { color: #a17bff; }
+.stat.sky.twilight .glyph { color: var(--d-accent); } .stat.sky.day .glyph { color: var(--d-warn); }
+ha-card.night #night-btn { color: var(--d-bad); }
 @container (max-width: 560px) { .stat.sky, .stat#stat-temp { display:none; } }
+@container (max-width: 440px) { .stat#stat-sd { display:none; } .topbar { padding: 10px; } }
 .icon-btn { width: 32px; height: 32px; border-radius: 10px; display:inline-grid; place-items:center; color: var(--d-mute); }
 .icon-btn:hover { background: var(--d-raise); color: var(--d-text); }
 
@@ -1372,7 +1479,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 .hud-target span { font-size: 13px; color: rgba(255,255,255,.7); }
 .hud-row { display:flex; gap: 12px; margin-top: 6px; font-size: 12px; color: rgba(255,255,255,.8); }
 .hud-row span { display:inline-flex; align-items:center; gap:4px; }
-.hud-row ha-icon { --mdc-icon-size: 14px; opacity:.7; }
+.hud-row .glyph { width: 15px; height: 15px; opacity: .75; }
 .hud-row b { font-variant-numeric: tabular-nums; font-weight: 600; }
 i.live { display:inline-block; width:7px; height:7px; border-radius: 50%; background: var(--d-ok); margin-right: 5px; animation: pulse 1.6s infinite; }
 i.live.rec { background: var(--d-bad); }
@@ -1435,14 +1542,14 @@ i.live.rec { background: var(--d-bad); }
 .tabs button:hover { color: var(--d-text); }
 .tabs button.on { color: var(--d-text); background: var(--d-raise); }
 .tabs button.on ha-icon { color: var(--d-accent); }
-.panel { padding: 14px; overflow-y: auto; flex: 1; max-height: 560px; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+.panel { padding: 14px; overflow-y: auto; flex: 1; max-height: 560px; scrollbar-width: thin; scrollbar-color: var(--d-scroll) transparent; }
 
 .group { margin-bottom: 16px; }
 .group > label { display:flex; justify-content:space-between; align-items:baseline; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--d-mute); margin-bottom: 8px; }
 .group > label small { text-transform:none; letter-spacing:0; font-weight: 500; color: var(--d-text); font-size: 12px; }
 .seg { display:flex; padding: 3px; gap: 3px; border-radius: 12px; background: var(--d-bg); border: 1px solid var(--d-line); }
 .seg button { flex:1; padding: 9px 6px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--d-mute); transition: .15s; }
-.seg button.on { background: var(--d-raise); color: var(--d-text); box-shadow: inset 0 0 0 1px rgba(255,107,53,.5); }
+.seg button.on { background: var(--d-seg-on); color: var(--d-text); box-shadow: var(--d-seg-shadow); }
 .slider { width: 100%; accent-color: var(--d-accent); height: 24px; }
 .ticks { display:flex; justify-content:space-between; font-size: 11px; color: var(--d-mute); padding: 0 2px; }
 .frames { display:flex; gap: 6px; }
@@ -1459,8 +1566,8 @@ i.live.rec { background: var(--d-bad); }
 
 .btn { display:inline-flex; align-items:center; justify-content:center; gap: 6px; padding: 9px 14px; border-radius: 12px; background: var(--d-raise); font-weight: 600; font-size: 14px; border: 1px solid var(--d-line); text-decoration:none; color: var(--d-text); }
 .btn:hover:not(:disabled) { border-color: rgba(255,255,255,.2); }
-.btn.primary { background: linear-gradient(145deg, var(--d-accent-2), var(--d-accent)); color: #160a03; border: 0; }
-.btn.danger { background: rgba(255,77,94,.14); color: #ff8b96; border-color: rgba(255,77,94,.3); }
+.btn.primary { background: linear-gradient(145deg, var(--d-accent-2), var(--d-accent)); color: var(--d-on-accent); border: 0; }
+.btn.danger { background: rgba(255,77,94,.14); color: var(--d-danger-text); border-color: rgba(255,77,94,.3); }
 .btn.big { width:100%; padding: 14px; font-size: 16px; border-radius: 14px; }
 .btn.big ha-icon { --mdc-icon-size: 22px; }
 
@@ -1478,6 +1585,9 @@ i.live.rec { background: var(--d-bad); }
 .targets { display:flex; flex-direction:column; gap: 6px; }
 .target { display:grid; grid-template-columns: 36px 1fr auto 40px; align-items:center; gap: 10px; padding: 8px 8px 8px 10px; border-radius: 14px; background: var(--d-bg); border: 1px solid transparent; }
 .target:hover { border-color: var(--d-line); }
+ha-card.light .target, ha-card.light .action, ha-card.light .kv div, ha-card.light .total, ha-card.light .custom { box-shadow: var(--d-shadow); border-color: var(--d-line); }
+ha-card.light .t-galaxy { color: #3d63e0; } ha-card.light .t-nebula { color: #d63a73; }
+ha-card.light .t-planetary { color: #0e9a8a; } ha-card.light .t-cluster { color: #b98300; }
 .target.current { border-color: rgba(61,220,151,.4); background: rgba(61,220,151,.05); }
 .target.below { opacity: .45; }
 .t-icon { width: 36px; height: 36px; border-radius: 10px; display:grid; place-items:center; background: var(--d-raise); }
@@ -1491,7 +1601,7 @@ i.live.rec { background: var(--d-bad); }
 .altbar { height: 3px; border-radius: 2px; background: var(--d-raise); margin-top: 4px; overflow:hidden; }
 .altbar i { display:block; height: 100%; background: linear-gradient(90deg, var(--d-accent), var(--d-ok)); }
 .goto-btn { width: 40px; height: 40px; padding:0; border-radius: 12px; }
-.goto-btn:hover:not(:disabled) { background: var(--d-accent); color: #160a03; border-color: transparent; }
+.goto-btn:hover:not(:disabled) { background: var(--d-accent); color: var(--d-on-accent); border-color: transparent; }
 .custom { margin-top: 14px; border-radius: 14px; background: var(--d-bg); border: 1px solid var(--d-line); }
 .custom summary { display:flex; gap: 8px; align-items:center; padding: 12px; cursor:pointer; font-weight: 600; font-size: 14px; color: var(--d-mute); list-style: none; }
 .custom-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 12px; }
@@ -1505,6 +1615,7 @@ i.live.rec { background: var(--d-bad); }
 .hero { position:relative; border-radius: 16px; overflow:hidden; cursor:pointer; margin-bottom: 14px; background:#000; aspect-ratio: 16/10; }
 .hero img { width:100%; height:100%; object-fit: cover; display:block; transition: transform .5s; }
 .hero:hover img { transform: scale(1.03); }
+.hero-meta, .thumb-cap { color: #fff; }
 .hero-meta { position:absolute; left:0; right:0; bottom:0; padding: 30px 14px 12px; background: linear-gradient(transparent, rgba(0,0,0,.85)); display:flex; flex-direction:column; }
 .hero-meta .kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--d-accent-2); }
 .hero-meta b { font-size: 20px; } .hero-meta span:last-child { font-size: 12px; color: rgba(255,255,255,.7); }
@@ -1527,7 +1638,7 @@ i.live.rec { background: var(--d-bad); }
 .action.busy { animation: pulse 1s infinite; }
 .dpad { position:relative; width: 156px; height: 156px; margin: 0 auto 18px; display:grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 4px; }
 .dpad button { border-radius: 14px; background: var(--d-raise); border: 1px solid var(--d-line); display:grid; place-items:center; }
-.dpad button:active { background: var(--d-accent); color: #160a03; }
+.dpad button:active { background: var(--d-accent); color: var(--d-on-accent); }
 .dpad ha-icon { --mdc-icon-size: 26px; }
 .dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
 .dpad-mid { grid-area: 2 / 2; display:grid; place-items:center; color: var(--d-mute); }
@@ -1549,12 +1660,12 @@ i.live.rec { background: var(--d-bad); }
 .lb-actions { display:flex; gap: 6px; }
 .confirm { position:absolute; inset:0; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); display:flex; align-items:center; justify-content:center; z-index: 20; opacity:0; pointer-events:none; transition: .15s; padding: 20px; }
 .confirm.show { opacity:1; pointer-events:auto; }
-.confirm-box { background: var(--d-panel); border: 1px solid var(--d-line); border-radius: 18px; padding: 18px; max-width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.confirm-box { background: var(--d-panel); color: var(--d-text); border: 1px solid var(--d-line); border-radius: 18px; padding: 18px; max-width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
 .confirm-text { font-size: 15px; line-height: 1.45; margin-bottom: 16px; }
 .confirm-actions { display:flex; justify-content:flex-end; gap: 8px; }
-.toast { position:absolute; left: 50%; bottom: 18px; transform: translate(-50%, 20px); padding: 10px 16px; border-radius: 12px; background: #20242d; border: 1px solid var(--d-line); font-size: 14px; opacity:0; pointer-events:none; transition: .25s; z-index: 30; max-width: calc(100% - 32px); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+.toast { position:absolute; left: 50%; bottom: 18px; transform: translate(-50%, 20px); padding: 10px 16px; border-radius: 12px; background: var(--d-toast); color: var(--d-text); border: 1px solid var(--d-line); font-size: 14px; opacity:0; pointer-events:none; transition: .25s; z-index: 30; max-width: calc(100% - 32px); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
 .toast.show { opacity:1; transform: translate(-50%, 0); }
-.toast.error { border-color: rgba(255,77,94,.5); color: #ffb3ba; }
+.toast.error { border-color: rgba(255,77,94,.5); color: var(--d-danger-text); }
 .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.2); border-top-color: var(--d-accent); animation: spin .8s linear infinite; display:inline-block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { opacity: .55; } }
@@ -1576,11 +1687,28 @@ class Dwarf3CardEditor extends HTMLElement {
     if (!this._hass || !this._config) return;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.schema = [{ name: "device_id", selector: { device: { integration: DOMAIN } } }];
-      this._form.computeLabel = () => "DWARF 3 (leave empty to use the first one)";
+      this._form.schema = [
+        { name: "device_id", selector: { device: { integration: DOMAIN } } },
+        {
+          name: "theme",
+          selector: {
+            select: {
+              mode: "dropdown",
+              options: [
+                { value: "auto", label: "Follow Home Assistant" },
+                { value: "dark", label: "Dark" },
+                { value: "light", label: "Light" },
+              ],
+            },
+          },
+        },
+      ];
+      this._form.computeLabel = (field) =>
+        field.name === "theme" ? "Theme" : "DWARF 3 (leave empty to use the first one)";
       this._form.addEventListener("value-changed", (ev) => {
         const config = { ...this._config, ...ev.detail.value };
         if (!config.device_id) delete config.device_id;
+        if (!config.theme || config.theme === "auto") delete config.theme;
         this._config = config;
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
       });
