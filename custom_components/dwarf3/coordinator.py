@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from datetime import timedelta
 from typing import Any
 
@@ -13,12 +14,16 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import RelayClient, RelayError, RelayUnauthorized, RelayUnreachable, ScopeError
+from .api import RelayBusy, RelayClient, RelayError, RelayUnauthorized, RelayUnreachable, ScopeError
 from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DIRECT_DEFAULT_SCAN_INTERVAL, DOMAIN
 from .direct import ScopeDirectClient, ScopeUnreachable
 from .stack import StackLibrary, StackTracker
 
 _LOGGER = logging.getLogger(__name__)
+
+# The relay refuses a poll now and then (the DWARFLAB app dropping its connection mid-read, a Wi-Fi blip). Keep
+# the last reading through that rather than turning every entity unavailable for one poll.
+GRACE_S = 90
 
 type Dwarf3ConfigEntry = ConfigEntry[Dwarf3Coordinator]
 
@@ -45,6 +50,7 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.stack: StackTracker | None = None
         self.library: StackLibrary | None = None
         self.sessions = Dwarf3SessionsCoordinator(hass, entry, client)
+        self._last_ok = float("-inf")
         # The last status the relay pushed, and whether we are listening to it right now.
         self.live: dict[str, Any] = {}
         self.live_connected = False
@@ -53,6 +59,7 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Take a status the relay pushed. The poll's schedule is left alone, so it still reads the motors."""
         previous = self.data or {}
         self.live = pushed
+        self._last_ok = time.monotonic()  # a push proves the relay is alive, whatever the next poll says
         merged = {**previous, **_known(pushed, previous)}
         came_online = pushed.get("scope_reachable") and not previous.get("scope_reachable")
         if merged != previous or not self.last_update_success:
@@ -72,8 +79,14 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             # The relay is up and the scope is not (asleep, or off the network, or still starting). Keep what the
             # relay told us, and otherwise just say the scope is away.
             return dict(self.live) if self.live_connected and self.live else {"scope_reachable": False}
-        except RelayUnreachable as err:
+        except (RelayBusy, RelayUnreachable) as err:
+            if self.data and time.monotonic() - self._last_ok < GRACE_S:
+                _LOGGER.debug("Keeping the last reading through a failed poll: %s", err)
+                return self.data
             raise UpdateFailed(f"Relay did not answer: {err}") from err
+        except RelayError as err:
+            raise UpdateFailed(str(err)) from err
+        self._last_ok = time.monotonic()
         # What was pushed is newer than what the poll read from the relay's memory a moment ago.
         return {**polled, **_known(self.live, polled)} if self.live_connected else polled
 

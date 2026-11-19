@@ -8,7 +8,7 @@
  * The card finds its entities through the entity registry (translation keys), so renamed entities keep working.
  */
 
-const VERSION = "0.3.3";
+const VERSION = "0.3.4";
 const DOMAIN = "dwarf3";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
@@ -222,6 +222,17 @@ function parseSession(name) {
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
+// The first node under root, through shadow roots, that matches.
+function deepFind(root, match) {
+  if (!root) return null;
+  if (match(root)) return root;
+  for (const child of [...(root.shadowRoot?.children || []), ...(root.children || [])]) {
+    const found = deepFind(child, match);
+    if (found) return found;
+  }
+  return null;
+}
+
 const icon = (name, cls = "") => `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
 
 // Line icons for the status bar and HUD, drawn to one grid so they sit together.
@@ -293,6 +304,10 @@ class Dwarf3Card extends HTMLElement {
   }
 
   connectedCallback() {
+    if (this._built) {
+      clearInterval(this._streamWatch);
+      this._streamWatch = setInterval(() => this._checkStream(), 2000);
+    }
     this._clock = setInterval(() => this._tick(), 60000);
     this._pipTimer = setInterval(() => this._refreshPip(), 10000);
     this._onResize = () => this._layout();
@@ -302,6 +317,8 @@ class Dwarf3Card extends HTMLElement {
   }
 
   disconnectedCallback() {
+    clearInterval(this._streamWatch);
+    clearTimeout(this._retryTimer);
     clearInterval(this._clock);
     clearInterval(this._pipTimer);
     window.removeEventListener("resize", this._onResize);
@@ -471,6 +488,15 @@ class Dwarf3Card extends HTMLElement {
 
           <section class="stage" id="stage">
             <div class="viewport" id="viewport"></div>
+            <div class="signal" id="signal">
+              <img id="signal-still" alt="">
+              <div class="signal-box">
+                ${icon("mdi:video-off-outline")}
+                <b>Video lost</b>
+                <span id="signal-text"></span>
+                <button class="btn" id="signal-retry">Retry now</button>
+              </div>
+            </div>
             <div class="reticle" id="reticle"><span></span><span></span></div>
 
             <div class="view-switch" id="view-switch">
@@ -568,6 +594,12 @@ class Dwarf3Card extends HTMLElement {
       if (v) this._setView(v);
     });
     this.$("pip").addEventListener("click", () => this._setView(this._view === "tele" ? "wide" : "tele"));
+    this.$("signal-retry").addEventListener("click", () => {
+      this._retries = 0;
+      this._renderViewport();
+    });
+    clearInterval(this._streamWatch);
+    this._streamWatch = setInterval(() => this._checkStream(), 2000);
     this.$("device-btn").addEventListener("click", () => {
       // HA has no device dialog; the more-info dialog names the device and links to its page.
       const entityId = this._ents.online || this._target.entity_id;
@@ -622,6 +654,8 @@ class Dwarf3Card extends HTMLElement {
   async _renderViewport() {
     const vp = this.$("viewport");
     vp.innerHTML = "";
+    clearTimeout(this._retryTimer);
+    this._streamLost(false);
     if (this._view === "stack") {
       const img = document.createElement("img");
       img.className = "stack-img";
@@ -693,19 +727,54 @@ class Dwarf3Card extends HTMLElement {
     this._update();
   }
 
+  // HA's stream player shows its raw error (a red ha-alert) when the video fails, and a stalled video just
+  // freezes. Either way: show the last still with a note, and build a new player after a growing delay.
+  _checkStream() {
+    const el = this._streamEl;
+    if (!el?.isConnected || this._view === "stack" || this._lost) return;
+    const alert = deepFind(el, (n) => n.tagName === "HA-ALERT");
+    const video = deepFind(el, (n) => n.tagName === "VIDEO");
+    if (video && video.readyState >= 2 && !video.paused) {
+      if (video.currentTime !== this._lastTime) {
+        this._lastTime = video.currentTime;
+        this._stalledSince = null;
+        this._retries = 0;
+        return;
+      }
+      this._stalledSince ??= Date.now();
+    }
+    const stalled = this._stalledSince && Date.now() - this._stalledSince > 12000;
+    if (!alert && !stalled) return;
+    this._stalledSince = null;
+    const delay = Math.min(30, 5 * 2 ** (this._retries || 0));
+    this._retries = (this._retries || 0) + 1;
+    this._streamLost(true, delay);
+    this._retryTimer = setTimeout(() => this._renderViewport(), delay * 1000);
+  }
+
+  _streamLost(lost, delay) {
+    this._lost = lost;
+    const box = this.$("signal");
+    if (!box) return;
+    box.classList.toggle("show", lost);
+    this._streamEl?.classList.toggle("hidden", lost);
+    this.$("reticle").style.visibility = lost ? "hidden" : "";
+    if (!lost) return;
+    const cam = this._st(this._view === "wide" ? "wideCamera" : "teleCamera");
+    const still = this.$("signal-still");
+    if (cam?.attributes.entity_picture) still.src = `${cam.attributes.entity_picture}&t=${Date.now()}`;
+    const online = this._val("online") === "on";
+    this.$("signal-text").textContent = online
+      ? `Reconnecting in ${delay} s`
+      : "The scope is offline. Reconnecting when it is back.";
+  }
+
   // The current frame of the main view as a small JPEG, or null when nothing is playing yet.
   _captureMain() {
-    const find = (node) => {
-      if (!node) return null;
-      if (node.tagName === "VIDEO" && node.videoWidth) return node;
-      if (node.tagName === "IMG" && node.complete && node.naturalWidth) return node;
-      for (const child of [...(node.shadowRoot?.children || []), ...node.children]) {
-        const found = find(child);
-        if (found) return found;
-      }
-      return null;
-    };
-    const media = find(this.$("viewport"));
+    const media = deepFind(
+      this.$("viewport"),
+      (n) => (n.tagName === "VIDEO" && n.videoWidth) || (n.tagName === "IMG" && n.complete && n.naturalWidth),
+    );
     if (!media) return null;
     const w = media.videoWidth || media.naturalWidth;
     const h = media.videoHeight || media.naturalHeight;
@@ -1404,8 +1473,16 @@ class Dwarf3Card extends HTMLElement {
     }
 
     // Capture finished -> refresh the gallery next time it opens
-    const finished = this._st("captureFinished")?.state;
-    if (this._lastFinished !== undefined && finished !== this._lastFinished) {
+    // An event entity's state is the time it last fired. Coming back from unavailable restores that time, which is
+    // not a new event, so only a time newer than the last one seen (and recent) counts.
+    const finishedState = this._st("captureFinished")?.state;
+    const finishedAt = Date.parse(finishedState);
+    const finished = Number.isNaN(finishedAt) ? (this._lastFinished ?? null) : finishedAt;
+    if (
+      this._lastFinished !== undefined &&
+      finished > (this._lastFinished ?? 0) &&
+      Date.now() - finished < 5 * 60 * 1000
+    ) {
       const type = this._st("captureFinished").attributes.event_type;
       this._toast(type === "capture_failed" ? "Capture failed" : "Capture finished", type === "capture_failed" ? "error" : "info");
       this._gallery = null;
@@ -1539,6 +1616,15 @@ ha-card.night #night-btn { color: var(--d-bad); }
 .stack-img { object-fit: contain; background: #000; }
 .stack-img:not([src]) { visibility: hidden; }
 .viewport.no-stack::after { content: "No stacks yet"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--d-mute); font-size: 15px; }
+.viewport .hidden { visibility: hidden; }
+.signal { position: absolute; inset: 0; display: none; place-items: center; background: #000; }
+.signal.show { display: grid; }
+.signal img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: .45; filter: blur(1px); }
+.signal img:not([src]) { display: none; }
+.signal-box { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 20px; border-radius: 16px;
+  background: rgba(10,11,15,.78); backdrop-filter: blur(10px); border: 1px solid var(--d-line); text-align: center; }
+.signal-box ha-icon { --mdc-icon-size: 28px; color: var(--d-mute); }
+.signal-box span { font-size: 13px; color: var(--d-mute); margin-bottom: 4px; }
 .no-signal { display:flex !important; flex-direction:column; align-items:center; justify-content:center; gap:8px; color: var(--d-mute); }
 .no-signal ha-icon { --mdc-icon-size: 40px; }
 .reticle { position:absolute; left:50%; top:50%; width: 64px; height: 64px; transform: translate(-50%,-50%); pointer-events:none; opacity:.55; }

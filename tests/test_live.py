@@ -172,3 +172,23 @@ async def test_an_old_relay_ends_the_listener_quietly(hass: HomeAssistant, caplo
     with caplog.at_level(logging.INFO, logger="custom_components.dwarf3.live"):
         await follow_relay(coordinator)
     assert not caplog.records
+
+
+async def test_a_push_counts_as_proof_of_life_for_a_refused_poll(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch
+):
+    """The relay sometimes refuses a poll with 409. While it keeps pushing, that is not an outage."""
+    from custom_components.dwarf3 import coordinator as coordinator_module
+
+    mock_relay(aioclient_mock)
+    entry = await setup(hass)
+    coordinator = entry.runtime_data
+    monkeypatch.setattr(coordinator_module, "GRACE_S", 1000)
+    coordinator._last_ok = float("-inf")  # the last good poll was long ago
+    coordinator.live_connected = True
+    coordinator.apply_live({"battery_percent": 61})
+
+    aioclient_mock.clear_requests()
+    mock_relay(aioclient_mock, status={"detail": "no app connection", "code": "busy"}, status_code=409)
+    await coordinator.async_refresh()
+    assert hass.states.get("sensor.dwarf_3_battery").state == "61"
