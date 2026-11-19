@@ -13,7 +13,7 @@ jobs:
     name: Tests and lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -28,7 +28,7 @@ jobs:
     name: Relay app config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: frenck/action-addon-linter@v2
         with:
           path: ./dwarf3_relay
@@ -37,7 +37,7 @@ jobs:
     name: Relay app builds and starts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: docker build -t relay-app dwarf3_relay
       - name: Start it the way Home Assistant does
