@@ -51,7 +51,7 @@ async def setup(hass: HomeAssistant) -> MockConfigEntry:
     entry = MockConfigEntry(domain=DOMAIN, data=USER, unique_id="relay.test:9902")
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     return entry
 
 
@@ -110,16 +110,48 @@ async def test_scope_asleep_keeps_the_entry_loaded(hass: HomeAssistant, aioclien
 
 
 async def test_relay_down_makes_setup_retry(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
-    aioclient_mock.get(f"{BASE}/api/status", exc=TimeoutError)
+    aioclient_mock.get(f"{BASE}/api/capabilities", exc=TimeoutError)
     entry = await setup(hass)
     assert entry.state is ConfigEntryState.SETUP_RETRY
 
 
 async def test_rejected_token_starts_reauth(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
+    aioclient_mock.get(f"{BASE}/api/capabilities", json=CAPS)
     aioclient_mock.get(f"{BASE}/api/status", json={"detail": "no", "code": "unauthorized"}, status=401)
     entry = await setup(hass)
-    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert entry.state is ConfigEntryState.LOADED, "the entities exist, and the first read asks for a new token"
     assert any(hass.config_entries.flow.async_progress_by_handler(DOMAIN))
+
+
+async def test_entities_exist_at_once_while_the_first_read_is_slow(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch
+):
+    import asyncio
+
+    from custom_components.dwarf3.api import RelayClient
+
+    gate = asyncio.Event()
+
+    async def slow_status(self):
+        await gate.wait()
+        return STATUS
+
+    mock_relay(aioclient_mock)
+    monkeypatch.setattr(RelayClient, "status", slow_status)
+    entry = MockConfigEntry(domain=DOMAIN, data=USER, unique_id="relay.test:9902")
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()  # setup is done; the first read is still running in the background
+
+    assert entry.state is ConfigEntryState.LOADED
+    for entity in ("sensor.dwarf_3_battery", "sensor.dwarf_3_capture_state", "binary_sensor.dwarf_3_connectivity"):
+        assert hass.states.get(entity).state == "unknown", entity + " should be unknown, not unavailable"
+    assert hass.states.get("camera.dwarf_3_wide_camera").state != "unavailable"
+
+    gate.set()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get("sensor.dwarf_3_battery").state == "87"
+    assert hass.states.get("sensor.dwarf_3_capture_sessions").state == "3"
 
 
 async def test_button_posts_with_the_token(hass: HomeAssistant, aioclient_mock: AiohttpClientMocker):
@@ -241,20 +273,20 @@ async def test_capture_finished_event_fires_once_per_job(hass: HomeAssistant, ai
     aioclient_mock.clear_requests()
     mock_relay(aioclient_mock, status=done)
     await entry.runtime_data.async_refresh()
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     first = hass.states.get(event_id)
     assert first.attributes["event_type"] == "capture_done"
     assert first.attributes["captured"] == 20 and first.attributes["session"] == "DWARF_RAW_x"
 
     await entry.runtime_data.async_refresh()
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get(event_id).state == first.state, "same job, no second event"
 
     failed = {**STATUS, "job": {**STATUS["job"], "id": "cd34", "state": "failed", "error": "scope left"}}
     aioclient_mock.clear_requests()
     mock_relay(aioclient_mock, status=failed)
     await entry.runtime_data.async_refresh()
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     assert hass.states.get(event_id).attributes["event_type"] == "capture_failed"
 
 
@@ -326,7 +358,7 @@ async def setup_direct(hass: HomeAssistant, monkeypatch) -> MockConfigEntry:
     )
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
     return entry
 
 
@@ -552,7 +584,7 @@ async def test_switching_from_read_only_to_the_relay_keeps_entity_ids(
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "relay"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "reconfigure_successful")
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     entry = hass.config_entries.async_get_entry(entry.entry_id)
     assert entry.state is ConfigEntryState.LOADED and entry.data["mode"] == "relay"
@@ -580,7 +612,7 @@ async def test_switching_back_to_read_only_keeps_entity_ids(
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "direct"})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
     assert result["reason"] == "reconfigure_successful"
-    await hass.async_block_till_done()
+    await hass.async_block_till_done(wait_background_tasks=True)
 
     entry = hass.config_entries.async_get_entry(entry.entry_id)
     assert entry.state is ConfigEntryState.LOADED and entry.data["mode"] == "direct"
@@ -611,7 +643,7 @@ async def _to_the_install_menu(hass):
 async def _finish_progress(hass, result):
     """A slow install shows a progress screen first. A fast one (as in these tests) finishes in one call."""
     if result["type"] is FlowResultType.SHOW_PROGRESS:
-        await hass.async_block_till_done()
+        await hass.async_block_till_done(wait_background_tasks=True)
         result = await hass.config_entries.flow.async_configure(result["flow_id"])
     return result
 
@@ -768,3 +800,57 @@ async def test_services_accept_an_entity_as_the_target(hass: HomeAssistant, aioc
     )
     posts = [c for c in aioclient_mock.mock_calls if c[0] == "POST" and c[1].path == "/api/move" and c[2].get("angle")]
     assert posts and posts[0][2]["angle"] == 90.0
+
+
+# ---- the "needs prepare" hint
+
+def _unprepared(**extra):
+    return {**STATUS, "pitch": None, "rotation": None, "job": None, **extra}
+
+
+async def test_needs_prepare_is_on_until_the_scope_reports_its_motors(hass: HomeAssistant, aioclient_mock):
+    mock_relay(aioclient_mock, status=_unprepared())
+    await setup(hass)
+    state = hass.states.get("binary_sensor.dwarf_3_needs_prepare")
+    assert state.state == "on"
+    assert "Press Prepare" in state.attributes["hint"]
+
+
+async def test_needs_prepare_is_off_once_prepared(hass: HomeAssistant, aioclient_mock):
+    mock_relay(aioclient_mock)  # STATUS has a pitch and rotation
+    await setup(hass)
+    state = hass.states.get("binary_sensor.dwarf_3_needs_prepare")
+    assert state.state == "off" and "hint" not in state.attributes
+
+
+async def test_pressing_prepare_clears_the_hint(hass: HomeAssistant, aioclient_mock):
+    aioclient_mock.post(f"{BASE}/api/prepare", json={"message": "ready, pointing up"})
+    mock_relay(aioclient_mock, status=_unprepared())
+    entry = await setup(hass)
+    assert hass.states.get("binary_sensor.dwarf_3_needs_prepare").state == "on"
+
+    aioclient_mock.clear_requests()
+    aioclient_mock.post(f"{BASE}/api/prepare", json={"message": "ready, pointing up"})
+    mock_relay(aioclient_mock)  # now it reports positions
+    await hass.services.async_call("button", "press", {"entity_id": "button.dwarf_3_prepare"}, blocking=True)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert hass.states.get("binary_sensor.dwarf_3_needs_prepare").state == "off"
+    assert entry.runtime_data.data["pitch"] == 172.5
+
+
+async def test_needs_prepare_is_unknown_when_the_scope_is_not_answering(hass: HomeAssistant, aioclient_mock):
+    mock_relay(aioclient_mock, status={"detail": "off", "code": "scope_error"}, status_code=502)
+    await setup(hass)
+    assert hass.states.get("binary_sensor.dwarf_3_needs_prepare").state == "unknown"
+
+
+async def test_a_running_capture_is_never_flagged(hass: HomeAssistant, aioclient_mock):
+    mock_relay(aioclient_mock, status=_unprepared(job=STATUS["job"]))  # positions are cached or empty mid-capture
+    await setup(hass)
+    assert hass.states.get("binary_sensor.dwarf_3_needs_prepare").state == "off"
+
+
+async def test_read_only_mode_has_no_prepare_hint(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    await setup_direct(hass, monkeypatch)
+    assert hass.states.get("binary_sensor.dwarf_3_needs_prepare") is None

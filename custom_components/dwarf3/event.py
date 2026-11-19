@@ -38,9 +38,17 @@ class Dwarf3CaptureEvent(Dwarf3Entity, EventEntity):
         super().__init__(coordinator, "capture_finished")
         job = _finished_job(coordinator.data)
         self._handled = job["id"] if job else None
+        # The first read of a scope arrives after the entities exist. What it holds is not news.
+        self._primed = bool(coordinator.data)
 
     def _handle_coordinator_update(self) -> None:
         job = _finished_job(self.coordinator.data)
+        if not self._primed:
+            if self.coordinator.data:
+                self._primed = True
+                self._handled = job["id"] if job else None
+            super()._handle_coordinator_update()
+            return
         if job and job["id"] != self._handled:
             self._handled = job["id"]
             self._trigger_event(

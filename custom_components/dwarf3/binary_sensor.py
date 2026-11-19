@@ -26,7 +26,26 @@ class Dwarf3BinaryDescription(BinarySensorEntityDescription):
     value: Callable[[dict[str, Any]], bool | None]
 
 
+def _needs_prepare(data: dict[str, Any]) -> bool | None:
+    """True while the scope has not been prepared since it was last switched on.
+
+    Until it has, it cannot report its motor positions, so pitch and rotation come back empty. The camera,
+    calibrate, goto and capture do not work in that state either. Unknown when the scope is not answering.
+    """
+    if not data.get("scope_reachable") or "pitch" not in data:
+        return None
+    if data.get("busy_elsewhere") or (data.get("job") or {}).get("state") == "running":
+        return False  # something is capturing, so it is clearly set up
+    return data["pitch"] is None and data.get("rotation") is None
+
+
 BINARY_SENSORS: tuple[Dwarf3BinaryDescription, ...] = (
+    Dwarf3BinaryDescription(
+        key="needs_prepare",
+        translation_key="needs_prepare",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value=_needs_prepare,
+    ),
     Dwarf3BinaryDescription(
         key="scope_reachable",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
@@ -77,3 +96,9 @@ class Dwarf3Binary(Dwarf3Entity, BinarySensorEntity):
     @property
     def is_on(self) -> bool | None:
         return self.entity_description.value(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.key == "needs_prepare" and self.is_on:
+            return {"hint": "Press Prepare. The camera, calibrate, goto and capture work only after it."}
+        return None

@@ -38,6 +38,8 @@ def _job(data: dict[str, Any], key: str) -> Any:
 
 
 def _job_state(data: dict[str, Any]) -> str | None:
+    if "job" not in data:
+        return None  # nothing read yet, or the scope is not answering: do not claim "idle"
     if data.get("busy_elsewhere"):
         return "running"
     state = _job(data, "state")
@@ -229,10 +231,6 @@ class Dwarf3SessionsSensor(Dwarf3Entity, SensorEntity):
 
     def __init__(self, coordinator: Dwarf3Coordinator) -> None:
         super().__init__(coordinator, "sessions")
-
-    @property
-    def available(self) -> bool:
-        return self.coordinator.sessions.last_update_success
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()

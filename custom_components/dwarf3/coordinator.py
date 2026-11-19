@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
@@ -86,7 +87,8 @@ class Dwarf3DirectCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.client = client
         self.platforms: list[Platform] = []
         self._sessions: list[str] | None = None
-        self._sessions_at = None
+        self._sessions_at: float | None = None
+        self._sessions_task: asyncio.Task[None] | None = None
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -95,11 +97,20 @@ class Dwarf3DirectCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Off, asleep, or out of range. Not a failure of ours, so the entities go unknown, not unavailable.
             return {"scope_reachable": False}
         now = self.hass.loop.time()
-        if self._sessions_at is None or now - self._sessions_at > SESSIONS_EVERY.total_seconds():
-            try:
-                self._sessions = await self.hass.async_add_executor_job(self.client.list_sessions_blocking)
-                self._sessions_at = now
-            except OSError as err:
-                _LOGGER.debug("Could not list capture sessions: %s", err)
+        stale = self._sessions_at is None or now - self._sessions_at > SESSIONS_EVERY.total_seconds()
+        if stale and (self._sessions_task is None or self._sessions_task.done()):
+            # Over FTP, and slow. A poll must not wait for it, so it fills in later.
+            self._sessions_task = self.config_entry.async_create_background_task(
+                self.hass, self._load_sessions(), "dwarf3 sessions"
+            )
         data["sessions"] = self._sessions
         return data
+
+    async def _load_sessions(self) -> None:
+        try:
+            self._sessions = await self.hass.async_add_executor_job(self.client.list_sessions_blocking)
+        except OSError as err:
+            _LOGGER.debug("Could not list capture sessions: %s", err)
+            return
+        self._sessions_at = self.hass.loop.time()
+        self.async_set_updated_data({**(self.data or {}), "sessions": self._sessions})

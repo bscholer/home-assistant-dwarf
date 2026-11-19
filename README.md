@@ -22,6 +22,8 @@ integration sets it up for you:
 2. Choose **Install and set it up for me**. It adds the app repository, installs the **DWARF 3 relay** app, gives it your
    scope's address and starts it.
 3. In the DWARFLAB app, enter your Home Assistant's IP address as the scope.
+4. Each time you switch the scope on, press **Prepare** on the device. The camera, Calibrate, goto and capture only work after
+   it. The **Needs prepare** sensor shows a problem until you have.
 
 Your entities and dashboards stay exactly as they were. You only gain more of them. Picking **Full control** when you first add
 the integration works the same way.
@@ -49,7 +51,7 @@ then choose **Full control** and enter that machine's address.
 |---|---|
 | "Nothing answered" when adding | The scope must be awake, on your Wi-Fi, and the address must be right. |
 | The scope's address changed | **⋮ → Reconfigure** and enter the new one. A fixed address in your router avoids this. |
-| Wide camera is blank | Press **Prepare** first. The scope only streams video after that. |
+| **Needs prepare** shows a problem, or the wide camera is blank | Press **Prepare**. The scope only reports its position and streams video after that. |
 | Calibrate fails | It needs a dark sky with stars, so it fails in daylight. |
 | Battery shows "unknown" | It appears about a minute after the scope connects to the relay. |
 | The DWARFLAB app can't find the scope | With the relay, enter your Home Assistant's IP address in the app, not the scope's. |
@@ -61,7 +63,7 @@ include what the scope reports about your Wi-Fi.
 
 - **Read-only:** scope online, SD card free, used and size, capture sessions.
 - **Full control adds:** capture state (idle, running, done, failed), capture progress, frames captured and failed, battery, body
-  and sensor temperatures, tracking, dark counts, relay version, **Capture finished** event, wide camera, and buttons for
+  and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide camera, and buttons for
   Prepare, Calibrate, Close barrel and Stop capture.
 
 ## Services (full control)
