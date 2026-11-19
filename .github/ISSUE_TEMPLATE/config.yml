@@ -1,5 +1,2 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Questions and ideas
-    url: https://github.com/bscholer/home-assistant-dwarf3/discussions
-    about: Ask how something works, or share what you built with it.
+# Discussions is off for now. Questions can use the "Idea or request" form.
+blank_issues_enabled: true
