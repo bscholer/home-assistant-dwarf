@@ -50,7 +50,7 @@ relay**, enter your scope's IP address and start it. The integration finds it by
 | Battery, temperatures, tracking | | ✔ |
 | Capture progress, "capture finished" event | | ✔ |
 | Live wide and tele video | ✔ (plays while the app has the camera on) | ✔ |
-| Buttons and services (goto, capture, darks, move, point) | | ✔ |
+| Buttons and actions (goto, capture, darks, move, point) | | ✔ |
 
 Without Home Assistant apps (Container or Core installs), run the relay yourself:
 `docker run -d --network host -e DWARF3_HOST=<scope ip> -e DWARF3_AUTH=off -v dwarf3:/data ghcr.io/bscholer/dwarf3-control`,
@@ -125,7 +125,7 @@ your Wi-Fi.
   Close barrel is the park position. There are no pitch or rotation sliders, on purpose: they would be too easy to hit by
   accident. For an exact position use `dwarf3.point`.
 
-## Services (full control)
+## Actions (full control)
 
 All take a DWARF 3 device as the target.
 
