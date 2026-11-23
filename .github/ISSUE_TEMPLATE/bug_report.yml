@@ -15,7 +15,7 @@ body:
       options:
         - Setup, discovery or reconfigure
         - Dashboard card
-        - Entities, buttons or services
+        - Entities, buttons or actions
         - Live video (camera)
         - Stacks, Media or casting
         - Relay app (install, start or connection)
