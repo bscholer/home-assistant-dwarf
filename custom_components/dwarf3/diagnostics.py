@@ -7,10 +7,10 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_MODE, CONF_TOKEN, MODE_DIRECT, MODE_RELAY
+from .const import CONF_MAC, CONF_MODE, CONF_TOKEN, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3ConfigEntry
 
-REDACT = {CONF_TOKEN, "host", "sessions", "session"}
+REDACT = {CONF_TOKEN, CONF_MAC, "host", "sessions", "session"}
 
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> dict[str, Any]:

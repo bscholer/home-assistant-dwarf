@@ -78,7 +78,7 @@ card looks old. The card uses the Barlow font (SIL Open Font License, in `fronte
 | You see | Try |
 |---|---|
 | "Nothing answered" when adding | The scope must be awake, on your Wi-Fi, and the address must be right. |
-| The scope's address changed | **⋮ → Reconfigure** and enter the new one. A fixed address in your router avoids this. |
+| The scope's address changed | Read-only: Home Assistant follows it when it sees the scope again, or use **⋮ → Reconfigure**. With the relay: change the scope's address in the relay app's **Configuration**. A fixed address in your router avoids this. |
 | **Needs prepare** shows a problem, or the wide camera is blank | Press **Prepare**. The scope only reports its position and streams video after that. |
 | Calibrate fails | It needs a dark sky with stars, so it fails in daylight. |
 | Battery shows "unknown" | It appears about a minute after the scope connects to the relay. |

@@ -95,3 +95,67 @@ async def test_the_card_is_back_when_a_scope_is_added_again(hass: HomeAssistant,
     await setup(hass)
     assert len(_ours(resources)) == 1, "and back without a restart"
     assert CARD_URL and LOCAL_CARD_URL
+
+
+async def test_diagnostics_do_not_show_the_mac(hass: HomeAssistant, aioclient_mock, monkeypatch):
+    from custom_components.dwarf3.diagnostics import async_get_config_entry_diagnostics
+
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    hass.config_entries.async_update_entry(entry, data={**entry.data, "mac": MAC})
+    out = await async_get_config_entry_diagnostics(hass, entry)
+    assert MAC not in str(out) and out["entry"]["mac"] == "**REDACTED**"
+
+
+async def test_an_ignored_discovery_does_not_make_a_hand_added_scope_collide(
+    hass: HomeAssistant, aioclient_mock, monkeypatch
+):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    entry = await setup_direct(hass, monkeypatch)
+    MockConfigEntry(
+        domain=DOMAIN, source="ignore", data={}, unique_id=f"direct:{MAC}"
+    ).add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": "dhcp"}, data=_dhcp("scope.test"))
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
+    assert entry.unique_id == "direct:scope.test", "left alone rather than moved onto an id that is taken"
+
+
+async def test_reconfigure_cannot_move_onto_an_address_another_entry_watches(
+    hass: HomeAssistant, aioclient_mock, monkeypatch
+):
+    aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
+    aioclient_mock.post("http://elsewhere.test:8082/deviceInfo", json=DEVICE_INFO)
+    watching = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: "scope.test", "mode": "direct", "mac": MAC}, unique_id=f"direct:{MAC}"
+    )
+    watching.add_to_hass(hass)
+    mine = MockConfigEntry(
+        domain=DOMAIN, data={CONF_HOST: "elsewhere.test", "mode": "direct"}, unique_id="direct:elsewhere.test"
+    )
+    mine.add_to_hass(hass)
+    result = await mine.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "direct"})
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {CONF_HOST: "scope.test"})
+    assert (result["type"], result["reason"]) == (FlowResultType.ABORT, "already_configured")
+
+
+async def test_two_entries_starting_together_set_the_card_up_once(hass: HomeAssistant):
+    import asyncio
+
+    from custom_components.dwarf3 import card
+
+    await _resources(hass)
+    calls = []
+    original = card._install
+
+    def counting(www):
+        calls.append(1)
+        return original(www)
+
+    card._install = counting
+    try:
+        await asyncio.gather(card.async_setup_card(hass), card.async_setup_card(hass))
+    finally:
+        card._install = original
+    assert len(calls) == 2, "both ran, one after the other"
+    assert len(_ours(hass.data["lovelace"].resources)) == 1

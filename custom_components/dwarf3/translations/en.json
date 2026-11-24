@@ -85,6 +85,7 @@
     },
     "abort": {
       "already_configured": "This one is already added.",
+      "already_in_progress": "Setting this up is already in progress.",
       "not_a_scope": "That device is not a DWARF 3.",
       "reauth_successful": "Token updated.",
       "reconfigure_successful": "Done. Your entities are unchanged."
