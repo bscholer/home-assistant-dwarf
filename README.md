@@ -17,7 +17,7 @@ Built and tested with one DWARF 3. It is an independent project and not affiliat
 
 ## Get started
 
-1. Install **DWARF 3 Smart Telescope** from the Home Assistant marketplace and restart Home Assistant.
+1. Install **DWARF 3 Smart Telescope** from the Home Assistant marketplace (Home Assistant 2026.3 or newer) and restart Home Assistant.
 2. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**: pick read-only, or full control to have the relay set up for you. If not,
    choose **Add integration → DWARF 3**.
 3. Pick **Read-only** and enter the scope's IP address (look in your router's list of devices).
@@ -98,9 +98,10 @@ your Wi-Fi.
 
 ## Entities
 
-- **Read-only:** scope online, SD card free, used and size, capture sessions.
+- **Read-only:** scope online, SD card free, used and size, capture sessions, the latest stack, and the wide and tele cameras
+  (live video only, while the DWARFLAB app has the camera on).
 - **Full control adds:** capture state (idle, running, done, failed), capture progress, frames captured and failed, battery, body
-  and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide and tele cameras (live video and stills), and buttons for
+  and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide and tele cameras (live video and stills), **DWARFLAB app connected** and **Capturing from another client** indicators, and buttons for
   Prepare, Calibrate, Close barrel and Stop capture.
 - **Latest stack**, an image of the newest session's `stacked.jpg`, scaled to 1280 px wide. It refreshes every 30 s while a
   capture runs (if the scope rewrites the file as it stacks, it updates live) and every 10 minutes otherwise. Cast it to a smart
