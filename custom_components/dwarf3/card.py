@@ -18,6 +18,8 @@ from pathlib import Path
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
+from .const import DOMAIN
+
 _LOGGER = logging.getLogger(__name__)
 
 URL_BASE = "/dwarf3_frontend"
@@ -69,7 +71,10 @@ async def async_setup_card(hass: HomeAssistant) -> None:
     """Install the card and register it. A failure here is logged and never stops the integration."""
     try:
         version, served = await hass.async_add_executor_job(_install, _www(hass))
-        await hass.http.async_register_static_paths([StaticPathConfig(URL_BASE, str(FRONTEND_DIR), True)])
+        domain_data = hass.data.setdefault(DOMAIN, {})
+        if not domain_data.get("card_path"):
+            await hass.http.async_register_static_paths([StaticPathConfig(URL_BASE, str(FRONTEND_DIR), True)])
+            domain_data["card_path"] = True
         url = f"{LOCAL_CARD_URL if served else CARD_URL}?v={version}"
         resources = _resources(hass)
         if resources is None:

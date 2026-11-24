@@ -72,7 +72,9 @@ class Dwarf3Camera(Dwarf3Entity, Camera):
         if self._image and time.monotonic() - self._image_time < FRESH_S:
             return self._image
         if self._task is None or self._task.done():
-            self._task = self.hass.async_create_task(self._fetch())
+            self._task = self.coordinator.config_entry.async_create_background_task(
+                self.hass, self._fetch(), f"dwarf3 {self._kind} frame"
+            )
         await asyncio.wait({self._task}, timeout=WAIT_S)
         if self._image:
             return self._image

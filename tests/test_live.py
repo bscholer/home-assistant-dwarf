@@ -162,7 +162,12 @@ def _client_with(*streams):
 
 class FakeCoordinator:
     def __init__(self, client, hass):
+        from types import SimpleNamespace
+
         self.client, self.hass = client, hass
+        self.config_entry = SimpleNamespace(
+            async_create_background_task=lambda hass, coro, name: hass.async_create_task(coro)
+        )
         self.live_connected = False
         self.applied: list[dict] = []
         self.refreshes = 0

@@ -501,7 +501,9 @@ async def test_a_scope_found_on_the_network_can_be_added_read_only(hass: HomeAss
     result = await _discovered(hass, aioclient_mock)
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": "discovery_readonly"})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {CONF_HOST: "scope.test", "mode": "direct"}
+    assert result["data"] == {CONF_HOST: "scope.test", "mode": "direct", "mac": "9c:b8:b4:57:d0:ec"}
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    assert entry.unique_id == "direct:9c:b8:b4:57:d0:ec", "identity is the MAC, not the address"
 
 
 async def test_a_found_scope_can_go_straight_to_full_control_with_the_relay_installed(

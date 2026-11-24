@@ -24,11 +24,9 @@ PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.CAMERA, Platform.
 DIRECT_PLATFORMS = [Platform.BINARY_SENSOR, Platform.CAMERA, Platform.IMAGE, Platform.SENSOR]
 
 
-
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async_setup_services(hass)
     hass.http.register_view(StackView())
-    await async_setup_card(hass)
     return True
 
 
@@ -38,6 +36,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     The first read of a scope can take 30 seconds or more, and waiting for it left the device page empty or
     "unavailable" the whole time. A relay that does not answer at all is still reported as not ready.
     """
+    # Here rather than in async_setup: removing the last entry takes the card away, and adding a scope again must
+    # bring it back without a restart. It is idempotent.
+    await async_setup_card(hass)
     session = async_get_clientsession(hass)
     if entry.data.get(CONF_MODE, MODE_RELAY) == MODE_DIRECT:
         direct = Dwarf3DirectCoordinator(hass, entry, ScopeDirectClient(session, entry.data[CONF_HOST]))
@@ -48,7 +49,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
         direct.platforms = DIRECT_PLATFORMS
         entry.runtime_data = direct
         await hass.config_entries.async_forward_entry_setups(entry, DIRECT_PLATFORMS)
-        entry.async_on_unload(entry.add_update_listener(_reload))
         entry.async_create_background_task(hass, direct.async_refresh(), "dwarf3 first read")
         return True
 
@@ -68,7 +68,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     coordinator.platforms = PLATFORMS
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_reload))
     entry.async_create_background_task(hass, _first_read(coordinator), "dwarf3 first read")
     entry.async_create_background_task(hass, follow_relay(coordinator), "dwarf3 live updates")
     return True
@@ -77,10 +76,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
 async def _first_read(coordinator: Dwarf3Coordinator) -> None:
     await coordinator.async_refresh()
     await coordinator.sessions.async_refresh()  # slow, so after the status
-
-
-async def _reload(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bool:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from .api import EventsUnsupported, RelayError, RelayUnreachable
+from .api import EventsUnsupported, RelayError, RelayUnauthorized, RelayUnreachable
 from .coordinator import Dwarf3Coordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +34,9 @@ async def follow_relay(coordinator: Dwarf3Coordinator) -> None:
                         warned = False
                     if connected_once:
                         # Anything could have changed while we were away.
-                        coordinator.hass.async_create_task(coordinator.async_request_refresh())
+                        coordinator.config_entry.async_create_background_task(
+                            coordinator.hass, coordinator.async_request_refresh(), "dwarf3 refresh after reconnect"
+                        )
                     connected_once = True
                     delay = FIRST_RETRY_S
                 coordinator.apply_live(pushed)
@@ -45,6 +47,11 @@ async def follow_relay(coordinator: Dwarf3Coordinator) -> None:
         except asyncio.CancelledError:
             coordinator.live_connected = False
             raise
+        except RelayUnauthorized:
+            # The poll reports this and starts reauthentication. Retrying here would only fill the log.
+            coordinator.live_connected = False
+            _LOGGER.debug("The relay refused the token for the live stream")
+            return
         except RelayError as err:
             error = err
         coordinator.live_connected = False
