@@ -6,6 +6,8 @@ later if you want it.
 
 ![The DWARF 3 dashboard card](docs/images/card.png)
 
+*Temporary screenshots: a simulated telescope and example pictures, standing in while the weather is bad. Real captures will replace them.*
+
 - **Dashboard card** with live wide and tele video, joystick, capture, goto and a gallery of your stacks.
 - **Sensors and events** for battery, temperatures, SD card, capture progress and "capture finished", to build automations on.
 - **Your stacks in Home Assistant**: browse them in Media, or cast the latest one to a smart display.

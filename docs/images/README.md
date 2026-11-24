@@ -6,5 +6,3 @@ Screenshots used in the main README. Keep the names, or update the README to mat
 | `card-live.png` | Live view with the joystick |
 | `card-goto.png` | The goto target list |
 | `card-gallery.png` | The stack gallery |
-
-Before adding a screenshot, check it for your Wi-Fi name, addresses, your location or coordinates, and tokens.
