@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 # the last reading through that rather than turning every entity unavailable for one poll.
 GRACE_S = 90
 
-type Dwarf3ConfigEntry = ConfigEntry[Dwarf3Coordinator]
+type Dwarf3ConfigEntry = ConfigEntry[Dwarf3Coordinator | Dwarf3DirectCoordinator]
 
 # The motor positions only come from a poll. The relay's push carries the last ones it remembers, which can be from
 # the last time the scope was on, and taken as current they hide a scope that needs Prepare.
@@ -79,7 +79,9 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.async_update_listeners()
         if came_online:
             # The relay sees the scope first. Read the motors and dark counts, which only a poll can do.
-            self.hass.async_create_task(self.async_request_refresh())
+            self.config_entry.async_create_background_task(
+                self.hass, self.async_request_refresh(), "dwarf3 refresh after the scope came online"
+            )
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:

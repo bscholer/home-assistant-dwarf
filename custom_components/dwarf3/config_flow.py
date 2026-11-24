@@ -8,9 +8,10 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.components import network
-from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.config_entries import SOURCE_RECONFIGURE, ConfigFlow, ConfigFlowResult, OptionsFlowWithReload
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 
@@ -18,6 +19,7 @@ from . import app_setup
 from .api import RelayClient, RelayError, RelayUnauthorized, RelayUnreachable
 from .app_setup import AppSetupError
 from .const import (
+    CONF_MAC,
     CONF_MODE,
     CONF_SCAN_INTERVAL,
     CONF_TOKEN,
@@ -39,6 +41,7 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         self._scope_host: str | None = None  # a scope found by DHCP, or the one a read-only entry was using
+        self._mac: str | None = None  # the MAC of a scope found by DHCP
         self._relay: dict[str, Any] | None = None  # a relay found on this Home Assistant
         self._install_task: asyncio.Task[None] | None = None
         self._install_error = ""
@@ -83,11 +86,23 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
         An entry keeps its id when its mode changes, so entity ids and dashboards survive a switch.
         """
         if self.source == SOURCE_RECONFIGURE:
-            return self.async_update_reload_and_abort(
-                self._get_reconfigure_entry(), unique_id=unique_id, title=title, data=data
-            )
+            entry = self._get_reconfigure_entry()
+            if (
+                data.get(CONF_MODE) == MODE_DIRECT
+                and entry.data.get(CONF_MODE) == MODE_DIRECT
+                and entry.data.get(CONF_MAC)
+                and entry.data[CONF_HOST] == data[CONF_HOST]
+            ):
+                # Same scope, same address: keep the MAC we learned and the identity built on it.
+                data, unique_id = {**data, CONF_MAC: entry.data[CONF_MAC]}, entry.unique_id or unique_id
+            other = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, unique_id)
+            if other is not None and other.entry_id != entry.entry_id:
+                return self.async_abort(reason="already_configured")  # another entry already is this scope or relay
+            return self.async_update_reload_and_abort(entry, unique_id=unique_id, title=title, data=data)
         await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured()
+        # A scope added by hand has no MAC to match on, so also compare the address.
+        self._async_abort_entries_match({k: data[k] for k in (CONF_HOST, CONF_PORT, CONF_MODE) if k in data})
         return self.async_create_entry(title=title, data=data)
 
     def _known_scope_host(self) -> str | None:
@@ -107,12 +122,28 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
         """The scope showed up on the network. Only offer it when it answers like a DWARF 3."""
+        host, mac = discovery_info.ip, dr.format_mac(discovery_info.macaddress)
+        if await self._check_scope(host):
+            return self.async_abort(reason="not_a_scope")
+        for entry in self._async_current_entries():
+            if entry.data.get(CONF_MODE) != MODE_DIRECT:
+                continue
+            known_mac = entry.data.get(CONF_MAC)
+            # The same scope: found again by its MAC, or an entry added by hand at this very address, whose MAC we
+            # now learn. Either way follow the address, so a new DHCP lease does not strand the entry.
+            if known_mac == mac or (known_mac is None and entry.data[CONF_HOST] == host):
+                if known_mac == mac and entry.data[CONF_HOST] == host:
+                    return self.async_abort(reason="already_configured")
+                return self.async_update_reload_and_abort(
+                    entry,
+                    unique_id=f"direct:{mac}",
+                    data_updates={CONF_HOST: host, CONF_MAC: mac},
+                    reason="already_configured",
+                )
         if self._async_current_entries():
             return self.async_abort(reason="already_configured")  # one scope is the usual case
-        if await self._check_scope(discovery_info.ip):
-            return self.async_abort(reason="not_a_scope")
-        self._scope_host = discovery_info.ip
-        await self.async_set_unique_id(f"direct:{discovery_info.ip}")
+        self._scope_host, self._mac = host, mac
+        await self.async_set_unique_id(f"direct:{mac}")
         self._abort_if_unique_id_configured()
         return await self.async_step_discovery_confirm()
 
@@ -128,11 +159,10 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     async def async_step_discovery_readonly(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         assert self._scope_host
-        return await self._finish(
-            data={CONF_HOST: self._scope_host, CONF_MODE: MODE_DIRECT},
-            unique_id=f"direct:{self._scope_host}",
-            title="DWARF 3",
-        )
+        data: dict[str, Any] = {CONF_HOST: self._scope_host, CONF_MODE: MODE_DIRECT}
+        if self._mac:
+            data[CONF_MAC] = self._mac
+        return await self._finish(data=data, unique_id=f"direct:{self._mac or self._scope_host}", title="DWARF 3")
 
     async def async_step_discovery_full(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """They picked full control, and we know the scope's address, so there is nothing left to ask.
@@ -193,7 +223,7 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_HOST, default=(user_input or {}).get(CONF_HOST) or local or vol.UNDEFINED): str,
-                vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
+                vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(int, vol.Range(min=1, max=65535)),
                 vol.Optional(CONF_TOKEN): str,
             }
         )
@@ -299,11 +329,11 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry: Dwarf3ConfigEntry) -> OptionsFlow:
+    def async_get_options_flow(config_entry: Dwarf3ConfigEntry) -> OptionsFlowWithReload:
         return Dwarf3OptionsFlow()
 
 
-class Dwarf3OptionsFlow(OptionsFlow):
+class Dwarf3OptionsFlow(OptionsFlowWithReload):
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             return self.async_create_entry(data=user_input)

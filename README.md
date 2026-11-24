@@ -4,10 +4,6 @@ Run your DWARF 3 from Home Assistant: live video, a joystick, goto and capture o
 temperatures, capture progress and your finished stacks for automations. Start read-only in a minute, and add full control
 later if you want it.
 
-![The DWARF 3 dashboard card](docs/images/card.png)
-
-*Temporary screenshots: a simulated telescope and example pictures, standing in while the weather is bad. Real captures will replace them.*
-
 - **Dashboard card** with live wide and tele video, joystick, capture, goto and a gallery of your stacks.
 - **Sensors and events** for battery, temperatures, SD card, capture progress and "capture finished", to build automations on.
 - **Your stacks in Home Assistant**: browse them in Media, or cast the latest one to a smart display.
@@ -17,7 +13,7 @@ Built and tested with one DWARF 3. It is an independent project and not affiliat
 
 ## Get started
 
-1. Install **DWARF 3 Smart Telescope** from the Home Assistant marketplace and restart Home Assistant.
+1. Install **DWARF 3 Smart Telescope** from the Home Assistant marketplace (Home Assistant 2026.3 or newer) and restart Home Assistant.
 2. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**: pick read-only, or full control to have the relay set up for you. If not,
    choose **Add integration → DWARF 3**.
 3. Pick **Read-only** and enter the scope's IP address (look in your router's list of devices).
@@ -64,10 +60,6 @@ The integration installs a **DWARF 3** card for you. Edit a dashboard, choose **
 panel view to fill the screen: the controls sit beside the live view on a desktop or a landscape tablet, and below it on a
 portrait tablet or a phone.
 
-| Live view and joystick | Goto | Gallery |
-|---|---|---|
-| ![Live view](docs/images/card-live.png) | ![Goto](docs/images/card-goto.png) | ![Gallery](docs/images/card-gallery.png) |
-
 It has the live view with a joystick, a shutter button with capture settings, goto with a list of targets and their height in
 your sky, a gallery of the stacks on the SD card, and the device controls. Most of it needs **Full control**.
 
@@ -98,9 +90,10 @@ your Wi-Fi.
 
 ## Entities
 
-- **Read-only:** scope online, SD card free, used and size, capture sessions.
+- **Read-only:** scope online, SD card free, used and size, capture sessions, the latest stack, and the wide and tele cameras
+  (live video only, while the DWARFLAB app has the camera on).
 - **Full control adds:** capture state (idle, running, done, failed), capture progress, frames captured and failed, battery, body
-  and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide and tele cameras (live video and stills), and buttons for
+  and sensor temperatures, tracking, **Needs prepare**, dark counts, relay version, **Capture finished** event, wide and tele cameras (live video and stills), **DWARFLAB app connected** and **Capturing from another client** indicators, and buttons for
   Prepare, Calibrate, Close barrel and Stop capture.
 - **Latest stack**, an image of the newest session's `stacked.jpg`, scaled to 1280 px wide. It refreshes every 30 s while a
   capture runs (if the scope rewrites the file as it stacks, it updates live) and every 10 minutes otherwise. Cast it to a smart

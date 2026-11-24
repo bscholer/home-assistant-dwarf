@@ -3,6 +3,7 @@
 DOMAIN = "dwarf3"
 
 CONF_TOKEN = "token"
+CONF_MAC = "mac"
 CONF_SCAN_INTERVAL = "scan_interval"
 
 DEFAULT_PORT = 9902
