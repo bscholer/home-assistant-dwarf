@@ -1,4 +1,4 @@
-"""The DWARF 3 smart telescope, through the dwarf3 relay."""
+"""The DWARF 3 smart telescope, through the DWARF relay."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
         direct.platforms = DIRECT_PLATFORMS
         entry.runtime_data = direct
         await hass.config_entries.async_forward_entry_setups(entry, DIRECT_PLATFORMS)
-        entry.async_create_background_task(hass, direct.async_refresh(), "dwarf3 first read")
+        entry.async_create_background_task(hass, direct.async_refresh(), "dwarf first read")
         return True
 
     client = RelayClient(session, entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data.get(CONF_TOKEN))
@@ -68,8 +68,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     coordinator.platforms = PLATFORMS
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_create_background_task(hass, _first_read(coordinator), "dwarf3 first read")
-    entry.async_create_background_task(hass, follow_relay(coordinator), "dwarf3 live updates")
+    entry.async_create_background_task(hass, _first_read(coordinator), "dwarf first read")
+    entry.async_create_background_task(hass, follow_relay(coordinator), "dwarf live updates")
     return True
 
 

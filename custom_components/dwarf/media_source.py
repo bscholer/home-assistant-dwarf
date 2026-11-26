@@ -1,6 +1,6 @@
 """Browse the stacks on the scope in Home Assistant's Media, and play them on a speaker or display.
 
-media-source://dwarf3/<entry id>/<session> resolves to a picture served by this integration, so Home Assistant can
+media-source://dwarf/<entry id>/<session> resolves to a picture served by this integration, so Home Assistant can
 sign the address and a smart display can fetch it.
 """
 
@@ -26,13 +26,13 @@ from .const import DOMAIN
 from .coordinator import Dwarf3ConfigEntry
 from .stack import describe
 
-VIEW_URL = "/api/dwarf3/stack/{entry_id}/{session}"
+VIEW_URL = "/api/dwarf/stack/{entry_id}/{session}"
 THUMBNAIL_URL = VIEW_URL + "/thumb"
 THUMBNAIL_VALID = timedelta(hours=1)
 
 
 def stack_path(entry_id: str, session: str, thumbnail: bool = False) -> str:
-    path = f"/api/dwarf3/stack/{entry_id}/{quote(session, safe='')}"
+    path = f"/api/dwarf/stack/{entry_id}/{quote(session, safe='')}"
     return path + "/thumb" if thumbnail else path
 
 
@@ -140,7 +140,7 @@ class StackView(HomeAssistantView):
 
     url = VIEW_URL
     extra_urls = [THUMBNAIL_URL]
-    name = "api:dwarf3:stack"
+    name = "api:dwarf:stack"
 
     async def get(self, request: web.Request, entry_id: str, session: str) -> web.Response:
         hass: HomeAssistant = request.app["hass"]

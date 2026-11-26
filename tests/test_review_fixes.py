@@ -8,8 +8,8 @@ from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.dwarf3.card import CARD_URL, LOCAL_CARD_URL
-from custom_components.dwarf3.const import CONF_TOKEN, DOMAIN
+from custom_components.dwarf.card import CARD_URL, LOCAL_CARD_URL
+from custom_components.dwarf.const import CONF_TOKEN, DOMAIN
 
 from .test_card import _ours, _resources
 from .test_integration import DEVICE_INFO, SCOPE, USER, mock_relay, setup, setup_direct
@@ -99,7 +99,7 @@ async def test_the_card_is_back_when_a_scope_is_added_again(hass: HomeAssistant,
 
 
 async def test_diagnostics_do_not_show_the_mac(hass: HomeAssistant, aioclient_mock, monkeypatch):
-    from custom_components.dwarf3.diagnostics import async_get_config_entry_diagnostics
+    from custom_components.dwarf.diagnostics import async_get_config_entry_diagnostics
 
     aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
     entry = await setup_direct(hass, monkeypatch)
@@ -143,7 +143,7 @@ async def test_reconfigure_cannot_move_onto_an_address_another_entry_watches(
 async def test_two_entries_starting_together_set_the_card_up_once(hass: HomeAssistant):
     import asyncio
 
-    from custom_components.dwarf3 import card
+    from custom_components.dwarf import card
 
     await _resources(hass)
     calls = []

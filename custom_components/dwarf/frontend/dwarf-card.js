@@ -1,7 +1,7 @@
 /**
- * DWARF 3 card: live view, joystick, capture, goto and gallery for the dwarf3 integration.
+ * DWARF 3 card: live view, joystick, capture, goto and gallery for the dwarf integration.
  *
- *   type: custom:dwarf3-card
+ *   type: custom:dwarf-card
  *   device_id: <optional, the first DWARF 3 is used when left out>
  *   theme: auto | light | dark   (auto follows Home Assistant)
  *
@@ -9,7 +9,7 @@
  */
 
 const VERSION = "0.3.5";
-const DOMAIN = "dwarf3";
+const DOMAIN = "dwarf";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
 const ROLES = {
@@ -45,10 +45,10 @@ const ROLES = {
 
 // Barlow (SIL OFL, frontend/fonts/OFL.txt), served by the integration next to this file. @font-face does not work
 // inside a shadow root, so it goes in the document once.
-const FONT_BASE = import.meta.url.startsWith("data:") ? "/dwarf3_frontend/fonts/" : new URL("fonts/", import.meta.url).href;
-if (!document.getElementById("dwarf3-card-fonts")) {
+const FONT_BASE = import.meta.url.startsWith("data:") ? "/dwarf_frontend/fonts/" : new URL("fonts/", import.meta.url).href;
+if (!document.getElementById("dwarf-card-fonts")) {
   const style = document.createElement("style");
-  style.id = "dwarf3-card-fonts";
+  style.id = "dwarf-card-fonts";
   style.textContent = [400, 500, 600, 700]
     .map(
       (w) => `@font-face { font-family: "DWARF3 Barlow"; font-style: normal; font-weight: ${w}; font-display: swap;
@@ -275,9 +275,9 @@ class Dwarf3Card extends HTMLElement {
     this._galleryError = null;
     this._settings = Object.assign(
       { exposure: "30", gain: 60, filter: "duo", frames: 100, darkFrames: 20, darkExposure: "30", darkWide: false },
-      JSON.parse(localStorage.getItem("dwarf3-card-settings") || "{}"),
+      JSON.parse(localStorage.getItem("dwarf-card-settings") || "{}"),
     );
-    this._night = localStorage.getItem("dwarf3-card-night") === "1";
+    this._night = localStorage.getItem("dwarf-card-night") === "1";
     this._busy = new Set();
   }
 
@@ -286,7 +286,7 @@ class Dwarf3Card extends HTMLElement {
   }
 
   static getConfigElement() {
-    return document.createElement("dwarf3-card-editor");
+    return document.createElement("dwarf-card-editor");
   }
 
   setConfig(config) {
@@ -462,7 +462,7 @@ class Dwarf3Card extends HTMLElement {
   }
 
   _saveSettings() {
-    localStorage.setItem("dwarf3-card-settings", JSON.stringify(this._settings));
+    localStorage.setItem("dwarf-card-settings", JSON.stringify(this._settings));
   }
 
   _toast(message, kind = "info") {
@@ -640,7 +640,7 @@ class Dwarf3Card extends HTMLElement {
     });
     this.$("night-btn").addEventListener("click", () => {
       this._night = !this._night;
-      localStorage.setItem("dwarf3-card-night", this._night ? "1" : "0");
+      localStorage.setItem("dwarf-card-night", this._night ? "1" : "0");
       this.$("card").classList.toggle("night", this._night);
     });
     this.$("banner-prepare").addEventListener("click", () => this._press("prepare", "Preparing the scope…"));
@@ -1152,7 +1152,7 @@ class Dwarf3Card extends HTMLElement {
     this._pendingGoto = null;
     if (ok) {
       this._lastGoto = { id: o.id, name: o.name || "", at: Date.now() };
-      localStorage.setItem("dwarf3-card-last-goto", JSON.stringify(this._lastGoto));
+      localStorage.setItem("dwarf-card-last-goto", JSON.stringify(this._lastGoto));
       this._toast(`Tracking ${o.id}`);
     }
     this._renderTargets();
@@ -1450,7 +1450,7 @@ class Dwarf3Card extends HTMLElement {
     $("hud-rot").textContent = rot === null ? "—" : `${rot.toFixed(1)}°`;
     const tracking = this._val("tracking") === "on";
     $("hud-track").innerHTML = tracking ? `<i class="live"></i>Tracking` : "";
-    if (!this._lastGoto) this._lastGoto = JSON.parse(localStorage.getItem("dwarf3-card-last-goto") || "null");
+    if (!this._lastGoto) this._lastGoto = JSON.parse(localStorage.getItem("dwarf-card-last-goto") || "null");
     const job = this._st("jobState")?.attributes || {};
     const jobTarget = job.session ? parseSession(job.session).target : null;
     const stackAttrs = this._st("latestStack")?.attributes || {};
@@ -1914,13 +1914,13 @@ class Dwarf3CardEditor extends HTMLElement {
   }
 }
 
-if (!customElements.get("dwarf3-card")) {
-  customElements.define("dwarf3-card", Dwarf3Card);
-  customElements.define("dwarf3-card-editor", Dwarf3CardEditor);
+if (!customElements.get("dwarf-card")) {
+  customElements.define("dwarf-card", Dwarf3Card);
+  customElements.define("dwarf-card-editor", Dwarf3CardEditor);
 }
 window.customCards = window.customCards || [];
-if (!window.customCards.some((c) => c.type === "dwarf3-card")) window.customCards.push({
-  type: "dwarf3-card",
+if (!window.customCards.some((c) => c.type === "dwarf-card")) window.customCards.push({
+  type: "dwarf-card",
   name: "DWARF 3",
   description: "Live view, joystick, capture, goto and gallery for a DWARF 3 smart telescope.",
   preview: false,

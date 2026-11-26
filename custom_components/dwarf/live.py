@@ -35,7 +35,7 @@ async def follow_relay(coordinator: Dwarf3Coordinator) -> None:
                     if connected_once:
                         # Anything could have changed while we were away.
                         coordinator.config_entry.async_create_background_task(
-                            coordinator.hass, coordinator.async_request_refresh(), "dwarf3 refresh after reconnect"
+                            coordinator.hass, coordinator.async_request_refresh(), "dwarf refresh after reconnect"
                         )
                     connected_once = True
                     delay = FIRST_RETRY_S

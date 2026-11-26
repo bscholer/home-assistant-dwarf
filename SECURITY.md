@@ -19,7 +19,7 @@ and the steps to reproduce.
 - **Read-only mode** only reads from the scope. It sends no commands.
 - **Diagnostics** hide your scope's address and leave out what it reports about your Wi-Fi. Check anything else you paste
   into an issue yourself.
-- The integration copies its dashboard card into `config/www/dwarf3` and registers it as a dashboard resource.
+- The integration copies its dashboard card into `config/www/dwarf` and registers it as a dashboard resource.
 
 ## Supported versions
 

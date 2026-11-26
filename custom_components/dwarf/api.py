@@ -1,4 +1,4 @@
-"""Client for the dwarf3 relay HTTP API. It needs nothing from the relay's own code."""
+"""Client for the DWARF relay HTTP API. It needs nothing from the relay's own code."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 import pytest
 
-from custom_components.dwarf3.config_flow import Dwarf3ConfigFlow
+from custom_components.dwarf.config_flow import Dwarf3ConfigFlow
 
 
 @pytest.fixture(autouse=True)
@@ -11,7 +11,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 @pytest.fixture(autouse=True)
 def card_www(tmp_path, monkeypatch):
     """The card is copied into www; keep that out of the shared test config folder."""
-    from custom_components.dwarf3 import card
+    from custom_components.dwarf import card
 
     www = tmp_path / "www"
     monkeypatch.setattr(card, "_www", lambda hass: www)
@@ -109,7 +109,7 @@ class FakeSupervisor:
 @pytest.fixture
 def supervisor(monkeypatch):
     """Pretend this Home Assistant has a Supervisor. Returns a function that installs a fake one."""
-    from custom_components.dwarf3 import app_setup
+    from custom_components.dwarf import app_setup
 
     monkeypatch.setattr(app_setup, "READY_WAIT_S", 0)
     monkeypatch.setattr(app_setup, "READY_TRIES", 3)
@@ -130,4 +130,4 @@ def no_live_listener(monkeypatch):
     async def idle(coordinator):
         return None
 
-    monkeypatch.setattr("custom_components.dwarf3.follow_relay", idle)
+    monkeypatch.setattr("custom_components.dwarf.follow_relay", idle)

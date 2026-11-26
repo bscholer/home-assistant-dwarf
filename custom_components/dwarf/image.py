@@ -56,7 +56,7 @@ class Dwarf3LatestStack(Dwarf3Entity, ImageEntity):
         self.async_write_ha_state()
 
     def _schedule_check(self) -> None:
-        self._entry.async_create_background_task(self.hass, self._tracker.async_check(), "dwarf3 latest stack")
+        self._entry.async_create_background_task(self.hass, self._tracker.async_check(), "dwarf latest stack")
 
     @callback
     def _handle_coordinator_update(self) -> None:

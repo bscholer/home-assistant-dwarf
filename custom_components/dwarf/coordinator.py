@@ -120,7 +120,7 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         if came_online:
             # The relay sees the scope first. Read the motors and dark counts, which only a poll can do.
             self.config_entry.async_create_background_task(
-                self.hass, self._refresh_after_online(), "dwarf3 refresh after the scope came online"
+                self.hass, self._refresh_after_online(), "dwarf refresh after the scope came online"
             )
 
     async def _refresh_after_online(self) -> None:
@@ -204,7 +204,7 @@ class Dwarf3DirectCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if stale and (self._sessions_task is None or self._sessions_task.done()):
             # Over FTP, and slow. A poll must not wait for it, so it fills in later.
             self._sessions_task = self.config_entry.async_create_background_task(
-                self.hass, self._load_sessions(), "dwarf3 sessions"
+                self.hass, self._load_sessions(), "dwarf sessions"
             )
         data["sessions"] = self._sessions
         return data
