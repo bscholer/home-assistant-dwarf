@@ -29,9 +29,15 @@ first, and Home Assistant 2026.3 or newer.
 
 ## Set it up
 
-1. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**. Pick read-only, or
-   full control if you want the relay set up for you. If it isn't listed, choose **Add integration** and search for **DWARF**.
-2. For read-only, enter the scope's IP address. Your router's list of devices will have it.
+After the restart, press this button to start the setup.
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=dwarf3)
+
+Or go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**. If it isn't, choose
+**Add integration** and search for **DWARF**.
+
+Pick read-only, or full control if you want the relay set up for you. For read-only, enter the scope's IP address. Your
+router's list of devices will have it.
 
 That's all. Read-only never touches the scope's one control connection, so the DWARFLAB app keeps working as normal.
 
@@ -51,8 +57,10 @@ integration sets it up for you:
 Your entities and dashboards stay exactly as they were. You only gain more of them. Picking **Full control** when you first add
 the integration works the same way.
 
-Prefer to do it by hand? Add `https://github.com/bscholer/home-assistant-dwarf` to the Home Assistant app store, install **DWARF
+Prefer to do it by hand? Press this button to add the app repository to the Home Assistant app store, then install **DWARF
 relay**, enter your scope's IP address and start it. The integration finds it by itself.
+
+[![Open your Home Assistant instance and show the add app repository dialog with this repository pre-filled.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fbscholer%2Fhome-assistant-dwarf)
 
 | | Read-only | Full control |
 |---|:-:|:-:|
