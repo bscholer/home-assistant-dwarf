@@ -3,7 +3,7 @@
 ## Reporting a problem
 
 Please do not open a public issue for a security problem. Use
-[private vulnerability reporting](https://github.com/bscholer/home-assistant-dwarf3/security/advisories/new)
+[private vulnerability reporting](https://github.com/bscholer/home-assistant-dwarf/security/advisories/new)
 on this repository instead. This is a one-person hobby project, so expect a reply within about a week, and a fix
 as soon as I can make one.
 

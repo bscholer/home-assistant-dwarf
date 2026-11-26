@@ -229,7 +229,7 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
                 return await self._finish(
                     data={CONF_HOST: host, CONF_PORT: port, CONF_TOKEN: token, CONF_MODE: MODE_RELAY},
                     unique_id=f"{host}:{port}",
-                    title=f"DWARF 3 relay ({host})",
+                    title=f"DWARF relay ({host})",
                 )
         schema = vol.Schema(
             {
@@ -296,13 +296,13 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
         """The relay app is running. Nothing more to ask."""
         assert self._relay
         host, port = self._relay[CONF_HOST], self._relay[CONF_PORT]
-        return await self._finish(data=self._relay, unique_id=f"{host}:{port}", title=f"DWARF 3 relay ({host})")
+        return await self._finish(data=self._relay, unique_id=f"{host}:{port}", title=f"DWARF relay ({host})")
 
     async def async_step_relay_found(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         assert self._relay
         if user_input is not None:
             host, port = self._relay[CONF_HOST], self._relay[CONF_PORT]
-            return await self._finish(data=self._relay, unique_id=f"{host}:{port}", title=f"DWARF 3 relay ({host})")
+            return await self._finish(data=self._relay, unique_id=f"{host}:{port}", title=f"DWARF relay ({host})")
         self._set_confirm_only()
         return self.async_show_form(step_id="relay_found", description_placeholders={"host": self._relay[CONF_HOST]})
 

@@ -53,7 +53,7 @@
       },
       "relay_install": {
         "title": "Your scope's address",
-        "description": "I'll add the DWARF 3 app repository (github.com/bscholer/home-assistant-dwarf3) to Home Assistant, install the relay app, and start it. Enter your scope's IP address, from your router's list of devices.",
+        "description": "I'll add the DWARF app repository (github.com/bscholer/home-assistant-dwarf) to Home Assistant, install the relay app, and start it. Enter your scope's IP address, from your router's list of devices.",
         "data": {
           "host": "Scope IP address"
         }

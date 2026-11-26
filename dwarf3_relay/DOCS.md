@@ -1,4 +1,4 @@
-# DWARF 3 relay
+# DWARF relay
 
 Your DWARF 3 only talks to one thing at a time. This app holds that connection and shares it, so the
 DWARFLAB app and Home Assistant work together.

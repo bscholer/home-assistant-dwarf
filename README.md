@@ -1,4 +1,4 @@
-# DWARF 3 for Home Assistant
+# DWARF for Home Assistant
 
 Run your DWARF 3 from Home Assistant: live video, a joystick, goto and capture on a dashboard card, plus battery,
 temperatures, capture progress and your finished stacks for automations. Start read-only in a minute, and add full control
@@ -13,7 +13,7 @@ Built and tested with one DWARF 3. It is an independent project and not affiliat
 
 ## Get started
 
-1. Install **DWARF 3 Smart Telescope** from the Home Assistant marketplace (Home Assistant 2026.3 or newer) and restart Home Assistant.
+1. Install **DWARF Smart Telescope** from the Home Assistant marketplace (Home Assistant 2026.3 or newer) and restart Home Assistant.
 2. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**: pick read-only, or full control to have the relay set up for you. If not,
    choose **Add integration → DWARF 3**.
 3. Pick **Read-only** and enter the scope's IP address (look in your router's list of devices).
@@ -27,7 +27,7 @@ relay, because the scope only shares those with whatever holds its one control c
 integration sets it up for you:
 
 1. Open the DWARF 3 integration, press **⋮ → Reconfigure**, and choose **Full control**.
-2. Choose **Install and set it up for me**. It adds the app repository, installs the **DWARF 3 relay** app, gives it your
+2. Choose **Install and set it up for me**. It adds the app repository, installs the **DWARF relay** app, gives it your
    scope's address and starts it.
 3. In the DWARFLAB app, enter your Home Assistant's IP address as the scope.
 4. Each time you switch the scope on, press **Prepare** on the device. The camera, Calibrate, goto and capture only work after
@@ -36,7 +36,7 @@ integration sets it up for you:
 Your entities and dashboards stay exactly as they were. You only gain more of them. Picking **Full control** when you first add
 the integration works the same way.
 
-Prefer to do it by hand? Add `https://github.com/bscholer/home-assistant-dwarf3` to the Home Assistant app store, install **DWARF 3
+Prefer to do it by hand? Add `https://github.com/bscholer/home-assistant-dwarf` to the Home Assistant app store, install **DWARF
 relay**, enter your scope's IP address and start it. The integration finds it by itself.
 
 | | Read-only | Full control |
@@ -51,7 +51,7 @@ relay**, enter your scope's IP address and start it. The integration finds it by
 | Buttons and actions (goto, capture, darks, move, point) | | ✔ |
 
 Without Home Assistant apps (Container or Core installs), run the relay yourself:
-`docker run -d --network host -e DWARF3_HOST=<scope ip> -e DWARF3_AUTH=off -v dwarf3:/data ghcr.io/bscholer/dwarf3-control`,
+`docker run -d --network host -e DWARF3_HOST=<scope ip> -e DWARF3_AUTH=off -v dwarf3:/data ghcr.io/bscholer/dwarf-relay`,
 then choose **Full control** and enter that machine's address.
 
 ## Dashboard card
@@ -84,7 +84,7 @@ card looks old. The card uses the Barlow font (SIL Open Font License, in `fronte
 | Battery shows "unknown" | It appears about a minute after the scope connects to the relay. |
 | The DWARFLAB app can't find the scope | With the relay, enter your Home Assistant's IP address in the app, not the scope's. |
 
-Something else? Open an [issue](https://github.com/bscholer/home-assistant-dwarf3/issues/new/choose) and attach
+Something else? Open an [issue](https://github.com/bscholer/home-assistant-dwarf/issues/new/choose) and attach
 **⋮ → Download diagnostics** from the device. Diagnostics hide your address and never include what the scope reports about
 your Wi-Fi.
 
