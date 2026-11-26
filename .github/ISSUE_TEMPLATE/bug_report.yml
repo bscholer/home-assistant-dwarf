@@ -64,7 +64,7 @@ body:
     id: version
     attributes:
       label: Integration version
-      description: Settings → Devices & services → DWARF 3, or HACS.
+      description: Settings → Devices & services → DWARF 3, or the Home Assistant marketplace.
       placeholder: "0.6.2"
     validations:
       required: true

@@ -15,16 +15,16 @@ independent project and not affiliated with DWARFLAB.
 
 ## Install
 
-It isn't in the default HACS list yet, so you add it to HACS by hand. You need [HACS](https://hacs.xyz/docs/use/) installed
-first, and Home Assistant 2026.3 or newer.
+It isn't in the Home Assistant marketplace's default list yet, so you add it by hand first. You need Home Assistant 2026.3 or
+newer.
 
-1. Press this button. It opens HACS in your Home Assistant and offers to add this repository.
+1. Press this button. It opens the marketplace in your Home Assistant and offers to add this repository.
 
-   [![Open your Home Assistant instance and open this repository in the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bscholer&repository=home-assistant-dwarf&category=integration)
+   [![Open your Home Assistant instance and open this repository in the Home Assistant marketplace.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bscholer&repository=home-assistant-dwarf&category=integration)
 
-   If the button doesn't work, do it by hand. In HACS, press **⋮** at the top right and choose **Custom repositories**. Paste
-   `https://github.com/bscholer/home-assistant-dwarf`, set the type to **Integration**, and press **Add**.
-2. Find **DWARF Smart Telescope** in HACS and press **Download**.
+   If the button doesn't work, do it by hand. In the marketplace, press **⋮** at the top right and choose **Custom repositories**.
+   Paste `https://github.com/bscholer/home-assistant-dwarf`, set the type to **Integration**, and press **Add**.
+2. Find **DWARF Smart Telescope** in the marketplace and press **Download**.
 3. Restart Home Assistant.
 
 ## Set it up
