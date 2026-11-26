@@ -1898,6 +1898,6 @@ if (!window.customCards.some((c) => c.type === "dwarf3-card")) window.customCard
   name: "DWARF 3",
   description: "Live view, joystick, capture, goto and gallery for a DWARF 3 smart telescope.",
   preview: false,
-  documentationURL: "https://github.com/bscholer/home-assistant-dwarf3",
+  documentationURL: "https://github.com/bscholer/home-assistant-dwarf",
 });
 console.info(`%c DWARF3-CARD %c ${VERSION} `, "background:#ff6b35;color:#000;font-weight:700", "background:#222;color:#fff");

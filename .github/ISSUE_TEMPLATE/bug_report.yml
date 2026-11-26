@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Thanks for reporting. A few details make this much quicker to fix. Please look through the
-        [troubleshooting table](https://github.com/bscholer/home-assistant-dwarf3#if-something-looks-wrong) first.
+        [troubleshooting table](https://github.com/bscholer/home-assistant-dwarf#if-something-looks-wrong) first.
         Don't paste your scope's Wi-Fi password, your address or any token. Diagnostics already leave those out.
   - type: dropdown
     id: area

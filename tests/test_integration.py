@@ -725,6 +725,16 @@ async def test_an_address_the_user_already_entered_in_the_app_is_kept(
     result = await _finish_progress(hass, result)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert fake.names() == ["repositories_list", "addon_info", "start_addon"], "repo known, nothing to install or set"
+    assert [c for c in fake.calls if c[0] == "start_addon"][0][1] == ("bbc0cf72_dwarf3_relay",), (
+        "an install from the repository's old name keeps its app"
+    )
+
+
+def test_app_slugs_follow_the_supervisor_hash():
+    from custom_components.dwarf3.app_setup import APP_SLUG, LEGACY_APP_SLUG
+
+    assert LEGACY_APP_SLUG == "bbc0cf72_dwarf3_relay", "the slug existing installs have"
+    assert APP_SLUG == "a51b3b4f_dwarf3_relay"
 
 
 async def test_install_failure_explains_and_offers_the_manual_way(

@@ -1,6 +1,6 @@
 {
   "domain": "dwarf3",
-  "name": "DWARF 3 Smart Telescope",
+  "name": "DWARF Smart Telescope",
   "after_dependencies": [
     "frontend",
     "hassio",
@@ -20,10 +20,10 @@
       "macaddress": "9CB8B4*"
     }
   ],
-  "documentation": "https://github.com/bscholer/home-assistant-dwarf3",
+  "documentation": "https://github.com/bscholer/home-assistant-dwarf",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/bscholer/home-assistant-dwarf3/issues",
+  "issue_tracker": "https://github.com/bscholer/home-assistant-dwarf/issues",
   "requirements": [],
   "version": "0.7.1"
 }
