@@ -98,6 +98,11 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
             other = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, unique_id)
             if other is not None and other.entry_id != entry.entry_id:
                 return self.async_abort(reason="already_configured")  # another entry already is this scope or relay
+            for other in self.hass.config_entries.async_entries(DOMAIN):
+                if other.entry_id != entry.entry_id and all(
+                    other.data.get(k) == data.get(k) for k in (CONF_HOST, CONF_PORT, CONF_MODE)
+                ):
+                    return self.async_abort(reason="already_configured")  # same address, whatever its identity
             return self.async_update_reload_and_abort(entry, unique_id=unique_id, title=title, data=data)
         await self.async_set_unique_id(unique_id)
         self._abort_if_unique_id_configured()
@@ -123,8 +128,6 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_dhcp(self, discovery_info: DhcpServiceInfo) -> ConfigFlowResult:
         """The scope showed up on the network. Only offer it when it answers like a DWARF 3."""
         host, mac = discovery_info.ip, dr.format_mac(discovery_info.macaddress)
-        if await self._check_scope(host):
-            return self.async_abort(reason="not_a_scope")
         for entry in self._async_current_entries():
             if entry.data.get(CONF_MODE) != MODE_DIRECT:
                 continue
@@ -133,7 +136,12 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
             # now learn. Either way follow the address, so a new DHCP lease does not strand the entry.
             if known_mac == mac or (known_mac is None and entry.data[CONF_HOST] == host):
                 if known_mac == mac and entry.data[CONF_HOST] == host:
-                    return self.async_abort(reason="already_configured")
+                    return self.async_abort(reason="already_configured")  # nothing changed, so no probe
+                if await self._check_scope(host):
+                    return self.async_abort(reason="not_a_scope")
+                taken = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, f"direct:{mac}")
+                if taken is not None and taken.entry_id != entry.entry_id:
+                    return self.async_abort(reason="already_configured")  # e.g. an ignored discovery of this scope
                 return self.async_update_reload_and_abort(
                     entry,
                     unique_id=f"direct:{mac}",
@@ -141,7 +149,10 @@ class Dwarf3ConfigFlow(ConfigFlow, domain=DOMAIN):
                     reason="already_configured",
                 )
         if self._async_current_entries():
-            return self.async_abort(reason="already_configured")  # one scope is the usual case
+            # One scope is the usual case, and a relay entry already covers the scope it fronts, so stay quiet.
+            return self.async_abort(reason="already_configured")
+        if await self._check_scope(host):
+            return self.async_abort(reason="not_a_scope")
         self._scope_host, self._mac = host, mac
         await self.async_set_unique_id(f"direct:{mac}")
         self._abort_if_unique_id_configured()

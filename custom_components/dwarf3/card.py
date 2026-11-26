@@ -10,6 +10,7 @@ The resource URL carries a hash of the file, so browsers fetch the card again af
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import shutil
@@ -68,7 +69,14 @@ async def _loaded(resources) -> None:
 
 
 async def async_setup_card(hass: HomeAssistant) -> None:
-    """Install the card and register it. A failure here is logged and never stops the integration."""
+    """Install the card and register it. Entries of a domain set up together, so this runs one at a time."""
+    lock = hass.data.setdefault(DOMAIN, {}).setdefault("card_lock", asyncio.Lock())
+    async with lock:
+        await _setup_card(hass)
+
+
+async def _setup_card(hass: HomeAssistant) -> None:
+    """A failure here is logged and never stops the integration."""
     try:
         version, served = await hass.async_add_executor_job(_install, _www(hass))
         domain_data = hass.data.setdefault(DOMAIN, {})
@@ -81,6 +89,7 @@ async def async_setup_card(hass: HomeAssistant) -> None:
             from homeassistant.components.frontend import add_extra_js_url
 
             add_extra_js_url(hass, url)
+            hass.data[DOMAIN]["extra_js_url"] = url
             return
         await _loaded(resources)
         ours = [r for r in resources.async_items() if _is_ours(r["url"])]
@@ -101,6 +110,10 @@ async def async_remove_card(hass: HomeAssistant) -> None:
     """Take the card out of the dashboard resources and www, when the last DWARF 3 is removed."""
     try:
         await hass.async_add_executor_job(shutil.rmtree, _www(hass) / "dwarf3", True)
+        if url := hass.data.get(DOMAIN, {}).pop("extra_js_url", None):
+            from homeassistant.components.frontend import remove_extra_js_url
+
+            remove_extra_js_url(hass, url)
         resources = _resources(hass)
         if resources is None:
             return

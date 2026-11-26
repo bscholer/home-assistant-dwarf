@@ -83,5 +83,5 @@ async def async_unload_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> b
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> None:
-    if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN)):
+    if not any(e.entry_id != entry.entry_id for e in hass.config_entries.async_entries(DOMAIN, include_ignore=False)):
         await async_remove_card(hass)

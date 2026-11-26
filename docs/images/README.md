@@ -1,4 +1,4 @@
-Screenshots used in the main README. Keep the names, or update the README to match.
+Screenshots of the dashboard card. The main README does not link them yet. Keep the names, or update the README to match.
 
 | File | What to show |
 |---|---|

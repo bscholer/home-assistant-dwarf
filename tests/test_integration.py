@@ -440,6 +440,7 @@ async def test_diagnostics_hide_the_wifi_password(hass: HomeAssistant, aioclient
     out = await async_get_config_entry_diagnostics(hass, entry)
     text = str(out)
     assert "hunter2" not in text and "scope.test" not in text
+    assert "9c:b8:b4" not in text.lower(), "the MAC identifies the scope too"
     assert "wifiPassword" in out["device_info_keys"], "key names help us learn the format, values never leave"
 
 
