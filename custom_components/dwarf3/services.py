@@ -9,8 +9,12 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_extract_config_entry_ids
 
 from .api import RelayError
-from .const import CONF_MODE, DOMAIN, EXPOSURES, FILTERS, MODE_DIRECT, MODE_RELAY
+from .const import CONF_MODE, DOMAIN, FILTERS, MODE_DIRECT, MODE_RELAY
 from .coordinator import Dwarf3Coordinator
+
+# Seconds, as the scope names them ("15", "1.3"). Which ones a scope has depends on the model, and the relay
+# refuses one its model lacks with a message that lists the right ones.
+EXPOSURE = vol.All(vol.Coerce(str), vol.Match(r"^\d+(\.\d+)?$"))
 
 GOTO_SCHEMA = cv.make_entity_service_schema(
     {
@@ -22,7 +26,7 @@ GOTO_SCHEMA = cv.make_entity_service_schema(
 CAPTURE_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Required("frames"): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
-        vol.Optional("exposure", default="15"): vol.All(vol.Coerce(str), vol.In(EXPOSURES)),
+        vol.Optional("exposure", default="15"): EXPOSURE,
         vol.Optional("gain", default=60): vol.Coerce(int),
         vol.Optional("filter", default="duo"): vol.In(FILTERS),
     }
@@ -32,7 +36,7 @@ CAPTURE_SCHEMA = cv.make_entity_service_schema(
 DARK_SCHEMA = cv.make_entity_service_schema(
     {
         vol.Required("frames"): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
-        vol.Optional("exposure", default="15"): vol.All(vol.Coerce(str), vol.In(EXPOSURES)),
+        vol.Optional("exposure", default="15"): EXPOSURE,
         vol.Optional("wide", default=False): cv.boolean,
     }
 )

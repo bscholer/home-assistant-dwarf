@@ -9,7 +9,7 @@ later if you want it.
 - **Your stacks in Home Assistant**: browse them in Media, or cast the latest one to a smart display.
 - **Works alongside the DWARFLAB app**, in read-only mode or through a small relay that Home Assistant installs for you.
 
-Built and tested with one DWARF 3. It is an independent project and not affiliated with DWARFLAB.
+Built and tested with one DWARF 3. The DWARF mini and DWARF II should work too: the integration and the relay detect the model and offer its own filters and exposures. Nobody has tried them yet, so please [open an issue](https://github.com/bscholer/home-assistant-dwarf/issues/new/choose) with what works. It is an independent project and not affiliated with DWARFLAB.
 
 ## Get started
 
@@ -115,8 +115,8 @@ your Wi-Fi.
   thumbnail and a title like "M 81, 30 s, 2026-11-18 03:11" (the time is the scope's own clock). Play one on any display from there,
   or in an automation with `media-source://dwarf3/<entry id>/<session folder name>`. It works in read-only mode too.
 - **Pitch and rotation** sensors, in degrees, like a PTZ camera's pan and tilt position. They are the scope's motor angles,
-  not altitude and azimuth, because the mount is tilted. Pitch 172.5 is straight up and 0 is the closed barrel.
-- **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5.
+  not altitude and azimuth, because the mount is tilted. On a DWARF 3, pitch 172.5 is straight up and 0 is the closed barrel.
+- **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5 (DWARF 3 only for now; the angle isn't known for the other models).
   Close barrel is the park position. There are no pitch or rotation sliders, on purpose: they would be too easy to hit by
   accident. For an exact position use `dwarf3.point`.
 
@@ -125,10 +125,10 @@ your Wi-Fi.
 All take a DWARF 3 device as the target.
 
 - `dwarf3.goto`: `name`, `ra_hours`, `dec_degrees` (J2000). The relay refuses a target within 30 degrees of the Sun.
-- `dwarf3.start_capture`: `frames`, `exposure` (15, 30, 60), `gain`, `filter` (vis, astro, duo).
+- `dwarf3.start_capture`: `frames`, `exposure` (seconds; 15, 30 or 60 on a DWARF 3, and the scope's own list with relay 0.6 or newer), `gain`, `filter` (vis, astro, duo on a DWARF 3; astro, duo on a mini; vis and astro, meaning IR cut and IR pass, on a DWARF II). The scope's online sensor lists the connected model's choices.
 - `dwarf3.start_dark`: `frames`, `exposure`, `wide`. Close the barrel first.
 - `dwarf3.move`: `angle`, `length` (0 to 1), `seconds` (up to 5).
-- `dwarf3.point`: `pitch` (0 to 175, 172.5 is straight up) and optional `rotation`.
+- `dwarf3.point`: `pitch` (0 to 175; 172.5 is straight up on a DWARF 3) and optional `rotation`.
 - `dwarf3.delete_session`: `session`. Cannot be undone, and is refused while a capture runs.
 
 ## Notes

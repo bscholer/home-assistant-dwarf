@@ -8,7 +8,7 @@
  * The card finds its entities through the entity registry (translation keys), so renamed entities keep working.
  */
 
-const VERSION = "0.3.4";
+const VERSION = "0.3.5";
 const DOMAIN = "dwarf3";
 
 // Translation key -> role. Battery and connectivity have no key; they are found by device class.
@@ -58,7 +58,13 @@ if (!document.getElementById("dwarf3-card-fonts")) {
   document.head.appendChild(style);
 }
 
+// What a DWARF 3 offers, and what a relay from before spec 0.2 accepts. Newer relays say what the connected model
+// has, and the scope's online sensor carries it (attributes model, filters, exposures, wide_darks).
 const EXPOSURES = ["15", "30", "60"];
+// The usual deep-sky exposures. The card offers the ones the connected model has (the relay lists many more).
+const CARD_EXPOSURES = ["10", "15", "30", "60", "120", "180"];
+// The DWARF II has an IR-cut switch rather than a filter wheel, so the same two positions get other names.
+const FILTER_LABELS = { "DWARF II": { vis: { label: "IR cut", hint: "Visible light only" }, astro: { label: "IR pass", hint: "Lets infrared through" } } };
 const FILTERS = [
   { id: "vis", label: "VIS", hint: "Clear, for galaxies and clusters" },
   { id: "astro", label: "Astro", hint: "Light pollution cut" },
@@ -376,6 +382,25 @@ class Dwarf3Card extends HTMLElement {
     const st = this._st("latestStack");
     if (!st?.attributes.session || !st.attributes.entity_picture) return null;
     return `${st.attributes.entity_picture}&v=${encodeURIComponent(st.state)}`;
+  }
+
+  /** The connected model's choices, from the scope's online sensor. */
+  _choices() {
+    const a = this._st("online")?.attributes || {};
+    const labels = FILTER_LABELS[a.model] || {};
+    const filters = (a.filters ? FILTERS.filter((f) => a.filters.includes(f.id)) : FILTERS).map((f) => ({ ...f, ...labels[f.id] }));
+    const long = CARD_EXPOSURES.filter((e) => (a.exposures || []).includes(e));
+    return { filters, exposures: long.length ? long : EXPOSURES, wideDarks: a.wide_darks !== false };
+  }
+
+  /** Keep saved settings to what this model has, say after moving the card to another scope. */
+  _fit(s) {
+    const { filters, exposures } = this._choices();
+    const near = (e) => exposures.reduce((best, x) => (Math.abs(x - e) < Math.abs(best - e) ? x : best), exposures[0]);
+    if (!exposures.includes(s.exposure)) s.exposure = near(Number(s.exposure));
+    if (!exposures.includes(s.darkExposure)) s.darkExposure = near(Number(s.darkExposure));
+    if (!filters.some((f) => f.id === s.filter)) s.filter = filters[filters.length - 1].id;
+    return s;
   }
 
   _st(role) {
@@ -922,16 +947,17 @@ class Dwarf3Card extends HTMLElement {
   }
 
   _panelShoot() {
-    const s = this._settings;
-    const filt = FILTERS.find((f) => f.id === s.filter);
+    const s = this._fit(this._settings);
+    const { filters, exposures } = this._choices();
+    const filt = filters.find((f) => f.id === s.filter);
     return `
       <div class="group">
         <label>Exposure</label>
-        ${this._seg("exposure", EXPOSURES.map((e) => ({ id: e, label: `${e} s` })), s.exposure)}
+        ${this._seg("exposure", exposures.map((e) => ({ id: e, label: `${e} s` })), s.exposure)}
       </div>
       <div class="group">
         <label>Filter <small>${esc(filt?.hint || "")}</small></label>
-        ${this._seg("filter", FILTERS, s.filter)}
+        ${this._seg("filter", filters, s.filter)}
       </div>
       <div class="group">
         <label>Gain <small id="gain-val">${s.gain}</small></label>
@@ -1265,9 +1291,9 @@ class Dwarf3Card extends HTMLElement {
 
       <div class="section-head"><span>Dark frames</span><small id="dark-counts"></small></div>
       <div class="group">
-        ${this._seg("darkExposure", EXPOSURES.map((e) => ({ id: e, label: `${e} s` })), this._settings.darkExposure)}
+        ${this._seg("darkExposure", this._choices().exposures.map((e) => ({ id: e, label: `${e} s` })), this._fit(this._settings).darkExposure)}
         <div class="row">
-          ${this._seg("darkWide", [{ id: "false", label: "Tele" }, { id: "true", label: "Wide" }], String(this._settings.darkWide))}
+          ${this._choices().wideDarks ? this._seg("darkWide", [{ id: "false", label: "Tele" }, { id: "true", label: "Wide" }], String(this._settings.darkWide)) : ""}
           <input type="number" class="num small" min="1" max="500" value="${this._settings.darkFrames}" id="dark-frames">
           <button class="btn" id="dark-go">${icon("mdi:circle-half-full")}Take</button>
         </div>
@@ -1312,7 +1338,7 @@ class Dwarf3Card extends HTMLElement {
     });
     panel.querySelector("#dark-go").addEventListener("click", () => {
       const s = this._settings;
-      this._call("start_dark", { frames: Number(s.darkFrames), exposure: s.darkExposure, wide: !!s.darkWide }).then(
+      this._call("start_dark", { frames: Number(s.darkFrames), exposure: s.darkExposure, wide: !!s.darkWide && this._choices().wideDarks }).then(
         (ok) => ok && this._toast(`Taking ${s.darkFrames} darks`),
       );
     });
@@ -1456,7 +1482,7 @@ class Dwarf3Card extends HTMLElement {
     const s = this._settings;
     $("rail-summary").innerHTML = running
       ? `<b>${progress === null ? "…" : `${progress.toFixed(0)}%`}</b>`
-      : `<b>${s.exposure}s</b><span>G${s.gain}</span><span>${FILTERS.find((f) => f.id === s.filter)?.label}</span><span>×${s.frames}</span>`;
+      : `<b>${s.exposure}s</b><span>G${s.gain}</span><span>${this._choices().filters.find((f) => f.id === s.filter)?.label}</span><span>×${s.frames}</span>`;
 
     const strip = $("capture-strip");
     strip.classList.toggle("show", running);

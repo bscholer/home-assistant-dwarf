@@ -12,10 +12,19 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import RelayBusy, RelayClient, RelayError, RelayUnauthorized, RelayUnreachable, ScopeError
-from .const import CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DIRECT_DEFAULT_SCAN_INTERVAL, DOMAIN
+from .const import (
+    CONF_SCAN_INTERVAL,
+    DEFAULT_MODEL,
+    DEFAULT_SCAN_INTERVAL,
+    DIRECT_DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    LEGACY_CAPTURE,
+    MODEL_BY_DEVICE_ID,
+)
 from .direct import ScopeDirectClient, ScopeUnreachable
 from .stack import StackLibrary, StackTracker
 
@@ -37,6 +46,21 @@ def _known(pushed: dict[str, Any], current: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in pushed.items() if v is not None or k == "job" or k not in current}
 
 
+def note_model(coordinator: DataUpdateCoordinator[dict[str, Any]], model: str) -> None:
+    """Keep the scope model, and show it on the device page. Only the DWARF 3 is tested."""
+    if model == coordinator.model:
+        return
+    coordinator.model = model
+    if model != DEFAULT_MODEL:
+        _LOGGER.warning("This is a %s. The integration is tested on the DWARF 3 only; please report what works", model)
+    registry = dr.async_get(coordinator.hass)
+    device = registry.async_get_device(identifiers={(DOMAIN, coordinator.config_entry.entry_id)})
+    if device:
+        # Rename only a device still named after a model, so a name someone chose stays.
+        name = model if device.name in MODEL_BY_DEVICE_ID.values() else device.name
+        registry.async_update_device(device.id, model=model, name=name)
+
+
 class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
     config_entry: Dwarf3ConfigEntry
 
@@ -50,6 +74,8 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.client = client
         self.relay_version: str | None = None
+        self.model = DEFAULT_MODEL
+        self.capture: dict[str, Any] = dict(LEGACY_CAPTURE)  # filters, exposures and wide darks for this model
         self.platforms: list[Platform] = []  # what was set up, so a mode switch unloads the right ones
         self.stack: StackTracker | None = None
         self.library: StackLibrary | None = None
@@ -58,6 +84,20 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         # The last status the relay pushed, and whether we are listening to it right now.
         self.live: dict[str, Any] = {}
         self.live_connected = False
+
+    def apply_capabilities(self, capabilities: dict[str, Any]) -> None:
+        service = capabilities.get("service") or {}
+        self.relay_version = service.get("version")
+        if capabilities.get("capture"):
+            self.capture = capabilities["capture"]
+        note_model(self, service.get("model") or DEFAULT_MODEL)
+
+    async def async_read_capabilities(self) -> None:
+        """Ask the relay again. It names the model only once it has seen the scope."""
+        try:
+            self.apply_capabilities(await self.client.capabilities())
+        except RelayError as err:
+            _LOGGER.debug("Could not read the relay capabilities: %s", err)
 
     def apply_live(self, pushed: dict[str, Any]) -> None:
         """Take a status the relay pushed. The poll's schedule is left alone, so it still reads the motors."""
@@ -80,8 +120,12 @@ class Dwarf3Coordinator(DataUpdateCoordinator[dict[str, Any]]):
         if came_online:
             # The relay sees the scope first. Read the motors and dark counts, which only a poll can do.
             self.config_entry.async_create_background_task(
-                self.hass, self.async_request_refresh(), "dwarf3 refresh after the scope came online"
+                self.hass, self._refresh_after_online(), "dwarf3 refresh after the scope came online"
             )
+
+    async def _refresh_after_online(self) -> None:
+        await self.async_request_refresh()
+        await self.async_read_capabilities()
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -139,6 +183,7 @@ class Dwarf3DirectCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             update_interval=timedelta(seconds=entry.options.get(CONF_SCAN_INTERVAL, DIRECT_DEFAULT_SCAN_INTERVAL)),
         )
         self.client = client
+        self.model = DEFAULT_MODEL
         self.platforms: list[Platform] = []
         self.stack: StackTracker | None = None
         self.library: StackLibrary | None = None
@@ -149,6 +194,8 @@ class Dwarf3DirectCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_update_data(self) -> dict[str, Any]:
         try:
             data: dict[str, Any] = {"scope_reachable": True, **await self.client.sd_card()}
+            if data.get("model"):
+                note_model(self, data["model"])
         except ScopeUnreachable:
             # Off, asleep, or out of range. Not a failure of ours, so the entities go unknown, not unavailable.
             return {"scope_reachable": False}
