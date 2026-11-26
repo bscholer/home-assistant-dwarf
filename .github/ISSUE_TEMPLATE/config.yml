@@ -1,2 +1,5 @@
-# Discussions is off for now. Questions can use the "Idea or request" form.
-blank_issues_enabled: true
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/bscholer/home-assistant-dwarf/discussions
+    about: Ask how something works, or show what you built with it.

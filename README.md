@@ -1,26 +1,41 @@
 # DWARF for Home Assistant
 
-Run your DWARF 3 from Home Assistant: live video, a joystick, goto and capture on a dashboard card, plus battery,
-temperatures, capture progress and your finished stacks for automations. Start read-only in a minute, and add full control
-later if you want it.
+I wanted my DWARF 3 in Home Assistant, so I built this. It shows the battery, temperatures, SD card and capture
+progress, and it gives you a dashboard card with live video, a joystick, goto and capture. Your finished stacks show up in the
+Media browser, and you can cast the latest one to a smart display. You can start read-only in a minute and add full control later.
 
-- **Dashboard card** with live wide and tele video, joystick, capture, goto and a gallery of your stacks.
-- **Sensors and events** for battery, temperatures, SD card, capture progress and "capture finished", to build automations on.
-- **Your stacks in Home Assistant**: browse them in Media, or cast the latest one to a smart display.
-- **Works alongside the DWARFLAB app**, in read-only mode or through a small relay that Home Assistant installs for you.
+![The DWARF 3 dashboard card](docs/images/card.png)
 
-Built and tested with one DWARF 3. The DWARF mini and DWARF II should work too: the integration and the relay detect the model and offer its own filters and exposures. Nobody has tried them yet, so please [open an issue](https://github.com/bscholer/home-assistant-dwarf/issues/new/choose) with what works. It is an independent project and not affiliated with DWARFLAB.
+It works next to the DWARFLAB app, either read-only or through a small relay app that Home Assistant installs for you.
 
-## Get started
+I've built and tested it with one DWARF 3. The DWARF mini and DWARF II should work too, since the integration and the relay
+detect the model and offer its own filters and exposures, but nobody has tried them yet. If you do, please
+[open an issue](https://github.com/bscholer/home-assistant-dwarf/issues/new/choose) and tell me what works. This is an
+independent project and not affiliated with DWARFLAB.
 
-1. Install **DWARF Smart Telescope** from the Home Assistant marketplace (Home Assistant 2026.3 or newer) and restart Home Assistant.
-2. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**: pick read-only, or full control to have the relay set up for you. If not,
-   choose **Add integration → DWARF 3**.
-3. Pick **Read-only** and enter the scope's IP address (look in your router's list of devices).
+## Install
 
-That's it. Read-only never touches the scope's one control connection, so the DWARFLAB app keeps working as normal.
+It isn't in the default HACS list yet, so you add it to HACS by hand. You need [HACS](https://hacs.xyz/docs/use/) installed
+first, and Home Assistant 2026.3 or newer.
 
-## Want more? Full control
+1. Press this button. It opens HACS in your Home Assistant and offers to add this repository.
+
+   [![Open your Home Assistant instance and open this repository in the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bscholer&repository=home-assistant-dwarf&category=integration)
+
+   If the button doesn't work, do it by hand. In HACS, press **⋮** at the top right and choose **Custom repositories**. Paste
+   `https://github.com/bscholer/home-assistant-dwarf`, set the type to **Integration**, and press **Add**.
+2. Find **DWARF Smart Telescope** in HACS and press **Download**.
+3. Restart Home Assistant.
+
+## Set it up
+
+1. Go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**. Pick read-only, or
+   full control if you want the relay set up for you. If it isn't listed, choose **Add integration** and search for **DWARF**.
+2. For read-only, enter the scope's IP address. Your router's list of devices will have it.
+
+That's all. Read-only never touches the scope's one control connection, so the DWARFLAB app keeps working as normal.
+
+## Full control
 
 Battery, temperatures, the camera, and buttons like **Prepare** and **Close barrel** need a small helper called the
 relay, because the scope only shares those with whatever holds its one control connection. It takes about a minute, and the
