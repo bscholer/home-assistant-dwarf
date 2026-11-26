@@ -89,7 +89,7 @@ def main() -> None:
     os.environ.update(env)
     for message in messages:
         print(message, flush=True)
-    os.execvp("dwarf3", ["dwarf3", "proxy", "--log-dir", str(DATA_DIR)])
+    os.execvp("dwarf-relay", ["dwarf-relay", "proxy", "--log-dir", str(DATA_DIR)])
 
 
 if __name__ == "__main__":
