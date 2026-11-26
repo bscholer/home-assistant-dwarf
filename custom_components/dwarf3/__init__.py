@@ -60,7 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
     except RelayError:
         capabilities = {}
     coordinator = Dwarf3Coordinator(hass, entry, client)
-    coordinator.relay_version = (capabilities.get("service") or {}).get("version")
+    coordinator.apply_capabilities(capabilities)
     coordinator.data = {}
     relay_source = RelayStackSource(client)
     coordinator.stack = StackTracker(hass, relay_source)
@@ -75,6 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: Dwarf3ConfigEntry) -> bo
 
 async def _first_read(coordinator: Dwarf3Coordinator) -> None:
     await coordinator.async_refresh()
+    await coordinator.async_read_capabilities()  # the relay names the model once it has seen the scope
     await coordinator.sessions.async_refresh()  # slow, so after the status
 
 

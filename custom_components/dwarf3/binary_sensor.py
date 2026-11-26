@@ -99,6 +99,10 @@ class Dwarf3Binary(Dwarf3Entity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
+        if self.entity_description.key == "scope_reachable":
+            # The card reads the model's choices here. Read-only mode has no capture, so only the model.
+            capture = getattr(self.coordinator, "capture", None)
+            return {"model": getattr(self.coordinator, "model", None), **(capture or {})}
         if self.entity_description.key == "needs_prepare" and self.is_on:
             return {"hint": "Press Prepare. The camera, calibrate, goto and capture work only after it."}
         return None

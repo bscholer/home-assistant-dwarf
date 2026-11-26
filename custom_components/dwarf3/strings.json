@@ -276,7 +276,7 @@
         },
         "filter": {
           "name": "Filter",
-          "description": "vis, astro, or duo."
+          "description": "vis, astro or duo on a DWARF 3. A mini has astro and duo, a DWARF II vis and astro."
         }
       }
     },
@@ -318,7 +318,7 @@
     },
     "point": {
       "name": "Point",
-      "description": "Move the motors to absolute positions. 172.5 pitch is straight up.",
+      "description": "Move the motors to absolute positions. On a DWARF 3, 172.5 pitch is straight up.",
       "fields": {
         "pitch": {
           "name": "Pitch",

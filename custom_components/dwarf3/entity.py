@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
-from .const import DOMAIN
+from .const import DEFAULT_MODEL, DOMAIN
 
 
 class Dwarf3Entity(CoordinatorEntity[DataUpdateCoordinator[dict[str, Any]]]):
@@ -19,7 +19,7 @@ class Dwarf3Entity(CoordinatorEntity[DataUpdateCoordinator[dict[str, Any]]]):
         self._attr_unique_id = f"{entry.entry_id}_{key}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name="DWARF 3",
+            name=getattr(coordinator, "model", DEFAULT_MODEL),
             manufacturer="DWARFLAB",
-            model="DWARF 3",
+            model=getattr(coordinator, "model", DEFAULT_MODEL),
         )

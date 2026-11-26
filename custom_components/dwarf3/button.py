@@ -11,6 +11,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api import RelayClient, RelayError
+from .const import POINT_UP_PITCH
 from .coordinator import Dwarf3ConfigEntry, Dwarf3Coordinator
 from .entity import Dwarf3Entity
 
@@ -20,7 +21,6 @@ class Dwarf3ButtonDescription(ButtonEntityDescription):
     press: Callable[[RelayClient], Awaitable[None]]
 
 
-POINT_UP_PITCH = 172.5  # straight up on a level tripod, as the relay's Prepare sets it
 NUDGE_LENGTH = 0.3
 NUDGE_SECONDS = 1.0
 
@@ -31,7 +31,7 @@ BUTTONS: tuple[Dwarf3ButtonDescription, ...] = (
     Dwarf3ButtonDescription(key="calibrate", translation_key="calibrate", press=lambda c: c.calibrate()),
     # The preset every setup needs: straight up. Parking is Close barrel.
     Dwarf3ButtonDescription(
-        key="point_up", translation_key="point_up", press=lambda c: c.point(POINT_UP_PITCH, None)
+        key="point_up", translation_key="point_up", press=lambda c: c.point(POINT_UP_PITCH["DWARF 3"], None)
     ),
     # Short joystick moves, like the left/right/up/down buttons of a PTZ camera. Measured on a DWARF 3, one second
     # at this strength turns about 9 degrees: angle 0 lowers rotation, 90 raises pitch, 180 raises rotation,
@@ -62,6 +62,11 @@ class Dwarf3Button(Dwarf3Entity, ButtonEntity):
         self.entity_description = description
 
     async def async_press(self) -> None:
+        if self.entity_description.key == "point_up" and self.coordinator.model not in POINT_UP_PITCH:
+            # Straight up is a motor angle measured on a DWARF 3. On another model it could point anywhere.
+            raise HomeAssistantError(
+                f"Point up is not known for the {self.coordinator.model} yet. Use Prepare, or the move buttons."
+            )
         try:
             await self.entity_description.press(self.coordinator.client)
         except RelayError as err:

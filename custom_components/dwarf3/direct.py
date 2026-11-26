@@ -13,7 +13,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import ALBUM_ROOT, SCOPE_API_PORT
+from .const import ALBUM_ROOTS, DEFAULT_MODEL, SCOPE_API_PORT, model_from_device_info
 
 RAW_SESSION = re.compile(r"^DWARF_RAW_")
 STACK_FILE = "stacked.jpg"
@@ -35,6 +35,29 @@ class ScopeDirectClient:
     def __init__(self, session: aiohttp.ClientSession, host: str) -> None:
         self._session = session
         self.host = host
+        self.model = DEFAULT_MODEL
+        self._album_root: str | None = None
+
+    def set_model(self, model: str) -> None:
+        if model != self.model:
+            self.model, self._album_root = model, None
+
+    def _root(self, ftp: ftplib.FTP) -> str:
+        """The folder that holds the astro sessions. Models name it differently, so look once."""
+        if self._album_root:
+            return self._album_root
+        roots = ALBUM_ROOTS.get(self.model, ALBUM_ROOTS[DEFAULT_MODEL])
+        if len(roots) == 1:
+            return roots[0]
+        for root in roots:
+            try:
+                ftp.cwd(root)
+            except ftplib.error_perm:
+                continue
+            ftp.cwd("/")
+            self._album_root = root
+            return root
+        return roots[0]
 
     async def device_info(self) -> dict[str, Any]:
         """Return the deviceInfo data. It holds secrets: callers pick fields and drop the rest."""
@@ -52,8 +75,13 @@ class ScopeDirectClient:
 
     async def sd_card(self) -> dict[str, Any]:
         """Return the card figures in GB. Keys are missing when the scope does not say."""
-        card = (await self.device_info()).get("sdCardInfo") or {}
+        info = await self.device_info()
+        card = info.get("sdCardInfo") or {}
         out: dict[str, Any] = {"has_sd_card": bool(card.get("hasSdcard"))}
+        model = model_from_device_info(info)
+        if model:
+            out["model"] = model
+            self.set_model(model)
         if card.get("hasSdcard"):
             for key, field in (("sd_free_gb", "availableSize"), ("sd_total_gb", "totalSize")):
                 if isinstance(card.get(field), (int, float)):
@@ -68,13 +96,13 @@ class ScopeDirectClient:
         ftp = ftplib.FTP(self.host, timeout=30)
         try:
             ftp.login()
-            names = [n.rsplit("/", 1)[-1] for n in ftp.nlst(ALBUM_ROOT)]
+            names = [n.rsplit("/", 1)[-1] for n in ftp.nlst(self._root(ftp))]
             sessions = sorted((n for n in names if RAW_SESSION.match(n)), key=session_order)
             if not sessions:
                 return None
             session = sessions[-1]
             lines: list[str] = []
-            ftp.dir(f"{ALBUM_ROOT}/{session}", lines.append)
+            ftp.dir(f"{self._root(ftp)}/{session}", lines.append)
             size = next(
                 (int(p[4]) for p in (line.split(None, 8) for line in lines) if len(p) == 9 and p[8] == STACK_FILE),
                 None,
@@ -84,7 +112,7 @@ class ScopeDirectClient:
             if known == (session, size):
                 return session, size, None
             buffer = bytearray()
-            ftp.retrbinary(f"RETR {ALBUM_ROOT}/{session}/{STACK_FILE}", buffer.extend)
+            ftp.retrbinary(f"RETR {self._root(ftp)}/{session}/{STACK_FILE}", buffer.extend)
             return session, size, bytes(buffer)
         finally:
             try:
@@ -101,7 +129,7 @@ class ScopeDirectClient:
         try:
             ftp.login()
             names = sorted(
-                (n.rsplit("/", 1)[-1] for n in ftp.nlst(ALBUM_ROOT) if RAW_SESSION.match(n.rsplit("/", 1)[-1])),
+                (n.rsplit("/", 1)[-1] for n in ftp.nlst(self._root(ftp)) if RAW_SESSION.match(n.rsplit("/", 1)[-1])),
                 key=session_order,
             )
             result: dict[str, dict[str, int | None]] = {}
@@ -110,7 +138,7 @@ class ScopeDirectClient:
                     result[session] = known[session]
                     continue
                 lines: list[str] = []
-                ftp.dir(f"{ALBUM_ROOT}/{session}", lines.append)
+                ftp.dir(f"{self._root(ftp)}/{session}", lines.append)
                 sizes = {p[8]: int(p[4]) for p in (line.split(None, 8) for line in lines) if len(p) == 9}
                 result[session] = {"stack": sizes.get(STACK_FILE), "thumb": sizes.get(THUMBNAIL_FILE)}
             return result
@@ -126,7 +154,7 @@ class ScopeDirectClient:
         try:
             ftp.login()
             buffer = bytearray()
-            ftp.retrbinary(f"RETR {ALBUM_ROOT}/{session}/{name}", buffer.extend)
+            ftp.retrbinary(f"RETR {self._root(ftp)}/{session}/{name}", buffer.extend)
             return bytes(buffer)
         finally:
             try:
@@ -139,7 +167,7 @@ class ScopeDirectClient:
         ftp = ftplib.FTP(self.host, timeout=20)
         try:
             ftp.login()
-            names = [n.rsplit("/", 1)[-1] for n in ftp.nlst(ALBUM_ROOT)]
+            names = [n.rsplit("/", 1)[-1] for n in ftp.nlst(self._root(ftp))]
         finally:
             try:
                 ftp.quit()

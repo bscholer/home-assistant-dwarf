@@ -44,6 +44,7 @@ start_capture:
       selector:
         select:
           options: ["15", "30", "60"]
+          custom_value: true
     gain:
       default: 60
       selector:
@@ -56,6 +57,7 @@ start_capture:
       selector:
         select:
           options: [vis, astro, duo]
+          custom_value: true
 start_dark:
   target:
     entity:
@@ -74,6 +76,7 @@ start_dark:
       selector:
         select:
           options: ["15", "30", "60"]
+          custom_value: true
     wide:
       default: false
       selector:

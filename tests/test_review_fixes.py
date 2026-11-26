@@ -81,7 +81,8 @@ async def test_changing_options_reloads_once(hass: HomeAssistant, aioclient_mock
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"scan_interval": 45})
     await hass.async_block_till_done(wait_background_tasks=True)
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert asked() - before == 1, "one setup after the change, not two"
+    # A setup asks twice: at the start, and again after the first read, when the relay knows the model.
+    assert asked() - before == 2, "one setup after the change, not two"
 
 
 async def test_the_card_is_back_when_a_scope_is_added_again(hass: HomeAssistant, aioclient_mock):
