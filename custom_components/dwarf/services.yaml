@@ -1,7 +1,7 @@
 goto:
   target:
     entity:
-      integration: dwarf3
+      integration: dwarf
   fields:
     name:
       required: true
@@ -29,7 +29,7 @@ goto:
 start_capture:
   target:
     entity:
-      integration: dwarf3
+      integration: dwarf
   fields:
     frames:
       required: true
@@ -61,7 +61,7 @@ start_capture:
 start_dark:
   target:
     entity:
-      integration: dwarf3
+      integration: dwarf
   fields:
     frames:
       required: true
@@ -84,7 +84,7 @@ start_dark:
 move:
   target:
     entity:
-      integration: dwarf3
+      integration: dwarf
   fields:
     angle:
       required: true
@@ -113,7 +113,7 @@ move:
 point:
   target:
     entity:
-      integration: dwarf3
+      integration: dwarf
   fields:
     pitch:
       required: true
@@ -134,7 +134,7 @@ point:
 delete_session:
   target:
     entity:
-      integration: dwarf3
+      integration: dwarf
   fields:
     session:
       required: true

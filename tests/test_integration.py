@@ -7,7 +7,7 @@ from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.dwarf3.const import CONF_TOKEN, DOMAIN
+from custom_components.dwarf.const import CONF_TOKEN, DOMAIN
 
 BASE = "http://relay.test:9902"
 CAPS = {
@@ -130,7 +130,7 @@ async def test_entities_exist_at_once_while_the_first_read_is_slow(
 ):
     import asyncio
 
-    from custom_components.dwarf3.api import RelayClient
+    from custom_components.dwarf.api import RelayClient
 
     gate = asyncio.Event()
 
@@ -352,7 +352,7 @@ SESSIONS = [
 
 
 async def setup_direct(hass: HomeAssistant, monkeypatch) -> MockConfigEntry:
-    from custom_components.dwarf3.direct import ScopeDirectClient
+    from custom_components.dwarf.direct import ScopeDirectClient
 
     monkeypatch.setattr(ScopeDirectClient, "list_sessions_blocking", lambda self: SESSIONS)
     entry = MockConfigEntry(
@@ -433,7 +433,7 @@ async def test_direct_mode_services_are_refused(hass: HomeAssistant, aioclient_m
 
 
 async def test_diagnostics_hide_the_wifi_password(hass: HomeAssistant, aioclient_mock, monkeypatch):
-    from custom_components.dwarf3.diagnostics import async_get_config_entry_diagnostics
+    from custom_components.dwarf.diagnostics import async_get_config_entry_diagnostics
 
     aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
     entry = await setup_direct(hass, monkeypatch)
@@ -445,7 +445,7 @@ async def test_diagnostics_hide_the_wifi_password(hass: HomeAssistant, aioclient
 
 
 def test_sessions_are_ordered_by_the_time_in_the_name():
-    from custom_components.dwarf3.direct import session_order
+    from custom_components.dwarf.direct import session_order
 
     ordered = sorted(SESSIONS, key=session_order)
     assert ordered[-1].startswith("DWARF_RAW_TELE_IC 1396"), "Nov 14 is newer than Nov 5, whatever the target name"
@@ -604,7 +604,7 @@ async def test_switching_back_to_read_only_keeps_entity_ids(
 ):
     from homeassistant.helpers import entity_registry as er
 
-    from custom_components.dwarf3.direct import ScopeDirectClient
+    from custom_components.dwarf.direct import ScopeDirectClient
 
     mock_relay(aioclient_mock)
     aioclient_mock.post(f"{SCOPE}/deviceInfo", json=DEVICE_INFO)
@@ -656,7 +656,7 @@ async def _finish_progress(hass, result):
 async def test_flow_installs_and_sets_up_the_relay_app(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, local_ip, supervisor
 ):
-    from custom_components.dwarf3.app_setup import APP_REPOSITORY, APP_SLUG
+    from custom_components.dwarf.app_setup import APP_REPOSITORY, APP_SLUG
 
     fake = supervisor()
     local_ip("relay.test")
@@ -731,7 +731,7 @@ async def test_an_address_the_user_already_entered_in_the_app_is_kept(
 
 
 def test_app_slugs_follow_the_supervisor_hash():
-    from custom_components.dwarf3.app_setup import APP_SLUG, LEGACY_APP_SLUG
+    from custom_components.dwarf.app_setup import APP_SLUG, LEGACY_APP_SLUG
 
     assert LEGACY_APP_SLUG == "bbc0cf72_dwarf3_relay", "the slug existing installs have"
     assert APP_SLUG == "a51b3b4f_dwarf3_relay"
@@ -1040,7 +1040,7 @@ async def test_a_scope_that_is_off_does_not_break_the_image(hass: HomeAssistant,
 
 
 async def test_read_only_mode_has_the_stack_too(hass: HomeAssistant, aioclient_mock, monkeypatch):
-    from custom_components.dwarf3.direct import ScopeDirectClient
+    from custom_components.dwarf.direct import ScopeDirectClient
 
     jpeg = make_jpeg()
     monkeypatch.setattr(ScopeDirectClient, "fetch_stack_blocking", lambda self, known: (NEWEST, len(jpeg), jpeg))
@@ -1053,7 +1053,7 @@ async def test_read_only_mode_has_the_stack_too(hass: HomeAssistant, aioclient_m
 async def test_stack_entity_keeps_its_id_on_a_switch(hass: HomeAssistant, aioclient_mock, monkeypatch, local_ip):
     from homeassistant.helpers import entity_registry as er
 
-    from custom_components.dwarf3.direct import ScopeDirectClient
+    from custom_components.dwarf.direct import ScopeDirectClient
 
     jpeg = make_jpeg()
     monkeypatch.setattr(ScopeDirectClient, "fetch_stack_blocking", lambda self, known: (NEWEST, len(jpeg), jpeg))
@@ -1073,7 +1073,7 @@ async def test_stack_entity_keeps_its_id_on_a_switch(hass: HomeAssistant, aiocli
 
 
 def test_session_names_are_described():
-    from custom_components.dwarf3.stack import describe
+    from custom_components.dwarf.stack import describe
 
     assert describe(NEWEST) == {"session": NEWEST, "camera": "tele", "exposure_s": 30, "gain": 60,
                                 "started": "2026-11-18 03:11:46", "target": "M 81"}
@@ -1087,7 +1087,7 @@ def test_a_small_image_is_not_resized():
 
     from PIL import Image
 
-    from custom_components.dwarf3.stack import downscale
+    from custom_components.dwarf.stack import downscale
 
     assert Image.open(io.BytesIO(downscale(make_jpeg(800, 400)))).width == 800
 
@@ -1100,7 +1100,7 @@ THUMB = b"\xff\xd8thumb"
 
 def library(monkeypatch, *, newest_jpeg=None, thumbs=True):
     """The scope's album, as seen through the relay client. Returns a counter of the listings made."""
-    from custom_components.dwarf3.api import RelayClient
+    from custom_components.dwarf.api import RelayClient
 
     jpeg = newest_jpeg or make_jpeg()
     stacks = {OLDER: make_jpeg(2000, 800), NEWEST: jpeg, BROKEN: None}
@@ -1133,7 +1133,7 @@ async def browse(hass, path=""):
 
     assert await async_setup_component(hass, "media_source", {})
     await hass.async_block_till_done()  # integrations register their sources in background tasks
-    return await media_source.async_browse_media(hass, f"media-source://dwarf3{path}")
+    return await media_source.async_browse_media(hass, f"media-source://dwarf{path}")
 
 
 async def test_every_stack_shows_up_in_the_media_browser_newest_first(hass: HomeAssistant, aioclient_mock, monkeypatch):
@@ -1143,7 +1143,7 @@ async def test_every_stack_shows_up_in_the_media_browser_newest_first(hass: Home
     root = await browse(hass)
     assert [c.title for c in root.children] == ["M 81, 30 s, 2026-11-18 03:11", "NGC 224, 30 s, 2026-11-17 21:06"]
     assert all(c.can_play and not c.can_expand and c.media_content_type == "image/jpeg" for c in root.children)
-    assert root.children[0].media_content_id == f"media-source://dwarf3/{entry.entry_id}/{NEWEST}"
+    assert root.children[0].media_content_id == f"media-source://dwarf/{entry.entry_id}/{NEWEST}"
     assert "authSig" in root.children[0].thumbnail, "thumbnails are signed, so the browser can load them"
     assert BROKEN not in str([c.title for c in root.children]), "only sessions that have a stack"
 
@@ -1183,7 +1183,7 @@ async def test_a_playable_address_serves_the_picture_and_is_signed(
     entry = await setup(hass)
     assert await async_setup_component(hass, "media_source", {})
     await hass.async_block_till_done()  # integrations register their sources in background tasks
-    play = await media_source.async_resolve_media(hass, f"media-source://dwarf3/{entry.entry_id}/{NEWEST}", None)
+    play = await media_source.async_resolve_media(hass, f"media-source://dwarf/{entry.entry_id}/{NEWEST}", None)
     assert play.mime_type == "image/jpeg"
 
     response = await (await hass_client()).get(play.url)
@@ -1197,7 +1197,7 @@ async def test_a_playable_address_serves_the_picture_and_is_signed(
 
 
 async def test_the_thumbnail_is_served_as_it_is(hass: HomeAssistant, aioclient_mock, monkeypatch, hass_client):
-    from custom_components.dwarf3.media_source import stack_path
+    from custom_components.dwarf.media_source import stack_path
 
     library(monkeypatch)
     mock_relay(aioclient_mock)
@@ -1207,7 +1207,7 @@ async def test_the_thumbnail_is_served_as_it_is(hass: HomeAssistant, aioclient_m
 
 
 async def test_unknown_or_unsafe_addresses_are_not_found(hass: HomeAssistant, aioclient_mock, monkeypatch, hass_client):
-    from custom_components.dwarf3.media_source import stack_path
+    from custom_components.dwarf.media_source import stack_path
 
     library(monkeypatch)
     mock_relay(aioclient_mock)
@@ -1215,7 +1215,7 @@ async def test_unknown_or_unsafe_addresses_are_not_found(hass: HomeAssistant, ai
     client = await hass_client()
     assert (await client.get(stack_path("nope", NEWEST))).status == 404
     assert (await client.get(stack_path(entry.entry_id, "something_else"))).status == 404
-    traversal = await client.get(f"/api/dwarf3/stack/{entry.entry_id}/DWARF_RAW_..%2F..%2Fetc")
+    traversal = await client.get(f"/api/dwarf/stack/{entry.entry_id}/DWARF_RAW_..%2F..%2Fetc")
     assert traversal.status in (400, 404), "refused, either by the web server or by us"
     assert (await client.get(stack_path(entry.entry_id, BROKEN))).status == 404, "a session with no stack"
 
@@ -1232,11 +1232,11 @@ async def test_resolving_an_unknown_stack_fails_cleanly(hass: HomeAssistant, aio
     assert await async_setup_component(hass, "media_source", {})
     await hass.async_block_till_done()  # integrations register their sources in background tasks
     with pytest.raises(Unresolvable):
-        await media_source.async_resolve_media(hass, "media-source://dwarf3/nope/DWARF_RAW_x", None)
+        await media_source.async_resolve_media(hass, "media-source://dwarf/nope/DWARF_RAW_x", None)
 
 
 async def test_read_only_mode_browses_over_ftp(hass: HomeAssistant, aioclient_mock, monkeypatch, hass_client):
-    from custom_components.dwarf3.direct import ScopeDirectClient
+    from custom_components.dwarf.direct import ScopeDirectClient
 
     jpeg = make_jpeg()
     monkeypatch.setattr(ScopeDirectClient, "fetch_stack_blocking", lambda self, known: (NEWEST, len(jpeg), jpeg))
@@ -1250,7 +1250,7 @@ async def test_read_only_mode_browses_over_ftp(hass: HomeAssistant, aioclient_mo
     entry = await setup_direct(hass, monkeypatch)
     root = await browse(hass)
     assert [c.title for c in root.children][0].startswith("M 81")
-    from custom_components.dwarf3.media_source import stack_path
+    from custom_components.dwarf.media_source import stack_path
 
     assert (await (await hass_client()).get(stack_path(entry.entry_id, NEWEST))).status == 200
 
@@ -1303,7 +1303,7 @@ async def test_the_wide_camera_keeps_its_entity_id(hass: HomeAssistant, aioclien
 async def test_a_refused_poll_keeps_the_last_reading(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch
 ):
-    from custom_components.dwarf3 import coordinator as coordinator_module
+    from custom_components.dwarf import coordinator as coordinator_module
 
     mock_relay(aioclient_mock)
     entry = await setup(hass)

@@ -1,6 +1,6 @@
 """The dashboard card: served from /local and added to the dashboard resources, so the card picker lists it.
 
-The card is copied to config/www/dwarf3, which Home Assistant serves from the moment it starts. A route of our own
+The card is copied to config/www/dwarf, which Home Assistant serves from the moment it starts. A route of our own
 only exists once this integration has loaded, and a dashboard opened before that (right after a restart) gets a 404
 and has no card until the next reload. When www did not exist at startup, /local is not served yet, so the card uses
 our own route until the next restart.
@@ -23,23 +23,28 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-URL_BASE = "/dwarf3_frontend"
-LOCAL_BASE = "/local/dwarf3"
-CARD_FILE = "dwarf3-card.js"
+URL_BASE = "/dwarf_frontend"
+LOCAL_BASE = "/local/dwarf"
+CARD_FILE = "dwarf-card.js"
 CARD_URL = f"{URL_BASE}/{CARD_FILE}"
 LOCAL_CARD_URL = f"{LOCAL_BASE}/{CARD_FILE}"
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
+# Before 0.9 this integration was called dwarf3. Its card lived at these addresses, and a dashboard that
+# still lists one gets pointed at the new card instead of keeping a dead resource.
+LEGACY_CARD_URLS = ("/dwarf3_frontend/dwarf3-card.js", "/local/dwarf3/dwarf3-card.js")
+
 
 def _is_ours(url: str) -> bool:
-    return str(url).split("?")[0] in (CARD_URL, LOCAL_CARD_URL)
+    return str(url).split("?")[0] in (CARD_URL, LOCAL_CARD_URL, *LEGACY_CARD_URLS)
 
 
 def _install(www: Path) -> tuple[str, bool]:
-    """Copy the card and its fonts into www/dwarf3. Returns the file hash and whether /local serves it already."""
+    """Copy the card and its fonts into www/dwarf. Returns the file hash and whether /local serves it already."""
     served = www.is_dir()  # /local is only set up when www exists at startup
     version = hashlib.sha256((FRONTEND_DIR / CARD_FILE).read_bytes()).hexdigest()[:10]
-    target = www / "dwarf3"
+    target = www / "dwarf"
+    shutil.rmtree(www / "dwarf3", ignore_errors=True)  # the old copy of the card, from before the rename
     for source in [FRONTEND_DIR / CARD_FILE, *sorted((FRONTEND_DIR / "fonts").iterdir())]:
         dest = target / source.relative_to(FRONTEND_DIR)
         if dest.exists() and dest.read_bytes() == source.read_bytes():
@@ -109,7 +114,7 @@ async def _setup_card(hass: HomeAssistant) -> None:
 async def async_remove_card(hass: HomeAssistant) -> None:
     """Take the card out of the dashboard resources and www, when the last DWARF 3 is removed."""
     try:
-        await hass.async_add_executor_job(shutil.rmtree, _www(hass) / "dwarf3", True)
+        await hass.async_add_executor_job(shutil.rmtree, _www(hass) / "dwarf", True)
         if url := hass.data.get(DOMAIN, {}).pop("extra_js_url", None):
             from homeassistant.components.frontend import remove_extra_js_url
 

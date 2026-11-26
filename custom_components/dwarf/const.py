@@ -1,6 +1,6 @@
 """Constants for the DWARF 3 integration."""
 
-DOMAIN = "dwarf3"
+DOMAIN = "dwarf"
 
 CONF_TOKEN = "token"
 CONF_MAC = "mac"

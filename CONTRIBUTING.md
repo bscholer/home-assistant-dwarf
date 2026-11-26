@@ -13,8 +13,8 @@ setups are as useful as code.
 
 ## Working on the code
 
-The integration is in `custom_components/dwarf3`, the relay app wrapper in `dwarf3_relay`, and the dashboard card in
-`custom_components/dwarf3/frontend`. Tests are in `tests`.
+The integration is in `custom_components/dwarf`, the relay app wrapper in `dwarf3_relay`, and the dashboard card in
+`custom_components/dwarf/frontend`. Tests are in `tests`.
 
 ```
 uv venv --python 3.13
@@ -35,10 +35,10 @@ Things to keep in mind:
 
 ## Releases
 
-Maintainer only. Bump `version` in `custom_components/dwarf3/manifest.json`, then push a tag with the same version
+Maintainer only. Bump `version` in `custom_components/dwarf/manifest.json`, then push a tag with the same version
 (`v0.7.2`). The release workflow refuses a tag that does not match the manifest.
 
 ## Licence
 
 By contributing you agree that your work is released under the MIT licence, like the rest of the project. The brand
-images in `custom_components/dwarf3/brand/` belong to DWARFLAB and are not covered by it.
+images in `custom_components/dwarf/brand/` belong to DWARFLAB and are not covered by it.

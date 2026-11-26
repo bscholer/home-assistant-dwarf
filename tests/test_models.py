@@ -6,7 +6,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.dwarf3.const import DOMAIN, model_from_device_info
+from custom_components.dwarf.const import DOMAIN, model_from_device_info
 
 from .test_integration import BASE, DEVICE_INFO, SCOPE, mock_relay, setup, setup_direct
 
@@ -79,7 +79,7 @@ async def test_read_only_mode_learns_the_model_from_the_scope(
 def test_read_only_mode_finds_the_album_folder_of_each_model():
     import ftplib
 
-    from custom_components.dwarf3.direct import ScopeDirectClient
+    from custom_components.dwarf.direct import ScopeDirectClient
 
     class FTP:
         def __init__(self, folders):

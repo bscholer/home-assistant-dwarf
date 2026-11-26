@@ -1,7 +1,7 @@
 from homeassistant.core import HomeAssistant
 
-from custom_components.dwarf3 import stack
-from custom_components.dwarf3.stack import StackLibrary, StackTracker
+from custom_components.dwarf import stack
+from custom_components.dwarf.stack import StackLibrary, StackTracker
 
 OLD = "DWARF_RAW_TELE_M 31_EXP_30_GAIN_60_2026-11-17-21-05-28-280"
 NEW = "DWARF_RAW_TELE_M 81_EXP_30_GAIN_60_2026-11-18-03-11-46-101"

@@ -3,7 +3,7 @@ from pathlib import Path
 from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
-from custom_components.dwarf3.card import CARD_URL, LOCAL_CARD_URL, async_remove_card, async_setup_card
+from custom_components.dwarf.card import CARD_URL, LOCAL_CARD_URL, async_remove_card, async_setup_card
 
 
 async def _resources(hass: HomeAssistant):
@@ -50,7 +50,7 @@ async def test_card_is_removed(hass: HomeAssistant):
 
 
 def test_card_fonts_ship_with_the_card():
-    from custom_components.dwarf3.card import FRONTEND_DIR
+    from custom_components.dwarf.card import FRONTEND_DIR
 
     for weight in (400, 500, 600, 700):
         assert (FRONTEND_DIR / "fonts" / f"barlow-{weight}.woff2").stat().st_size > 1000
@@ -62,11 +62,11 @@ async def test_card_is_copied_to_www_and_served_from_local(hass: HomeAssistant, 
     www.mkdir()
     resources = await _resources(hass)
     await async_setup_card(hass)
-    assert (www / "dwarf3" / "dwarf3-card.js").exists()
-    assert (www / "dwarf3" / "fonts" / "barlow-500.woff2").exists()
+    assert (www / "dwarf" / "dwarf-card.js").exists()
+    assert (www / "dwarf" / "fonts" / "barlow-500.woff2").exists()
     assert _ours(resources)[0]["url"].startswith(f"{LOCAL_CARD_URL}?v=")
     await async_remove_card(hass)
-    assert not (www / "dwarf3").exists()
+    assert not (www / "dwarf").exists()
 
 
 async def test_without_www_at_startup_the_card_uses_its_own_route(hass: HomeAssistant, card_www: Path):
@@ -75,4 +75,19 @@ async def test_without_www_at_startup_the_card_uses_its_own_route(hass: HomeAssi
     await async_setup_card(hass)
     assert _ours(resources)[0]["url"].startswith(f"{CARD_URL}?v=")
     # Copied anyway, so /local serves it after the next restart.
-    assert (card_www / "dwarf3" / "dwarf3-card.js").exists()
+    assert (card_www / "dwarf" / "dwarf-card.js").exists()
+
+
+async def test_a_card_from_before_the_rename_is_replaced(hass, card_www):
+    """0.8 and older called the integration dwarf3. Its dashboard resource and www copy must not linger."""
+    old = card_www / "dwarf3"
+    old.mkdir(parents=True)
+    (old / "dwarf3-card.js").write_text("// the old card")
+    from custom_components.dwarf import card
+
+    assert card._is_ours("/local/dwarf3/dwarf3-card.js?v=abc")
+    assert card._is_ours("/dwarf3_frontend/dwarf3-card.js")
+    assert not card._is_ours("/local/somebody-else/card.js")
+    await hass.async_add_executor_job(card._install, card_www)
+    assert not old.exists()
+    assert (card_www / "dwarf" / "dwarf-card.js").exists()

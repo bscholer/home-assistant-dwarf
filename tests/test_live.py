@@ -8,9 +8,9 @@ import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.dwarf3 import live
-from custom_components.dwarf3.api import EventsUnsupported, RelayClient, RelayUnreachable
-from custom_components.dwarf3.live import follow_relay
+from custom_components.dwarf import live
+from custom_components.dwarf.api import EventsUnsupported, RelayClient, RelayUnreachable
+from custom_components.dwarf.live import follow_relay
 
 from .test_integration import BASE, STATUS, mock_relay, setup
 
@@ -202,7 +202,7 @@ async def test_reconnecting_is_quiet(hass: HomeAssistant, monkeypatch, caplog):
         [down],
     )
     coordinator = FakeCoordinator(client, hass)
-    with caplog.at_level(logging.DEBUG, logger="custom_components.dwarf3.live"):
+    with caplog.at_level(logging.DEBUG, logger="custom_components.dwarf.live"):
         with pytest.raises(Stop):
             await follow_relay(coordinator)
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
@@ -217,7 +217,7 @@ async def test_reconnecting_is_quiet(hass: HomeAssistant, monkeypatch, caplog):
 
 async def test_an_old_relay_ends_the_listener_quietly(hass: HomeAssistant, caplog):
     coordinator = FakeCoordinator(_client_with([EventsUnsupported("no")]), hass)
-    with caplog.at_level(logging.INFO, logger="custom_components.dwarf3.live"):
+    with caplog.at_level(logging.INFO, logger="custom_components.dwarf.live"):
         await follow_relay(coordinator)
     assert not caplog.records
 
@@ -226,7 +226,7 @@ async def test_a_push_counts_as_proof_of_life_for_a_refused_poll(
     hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, monkeypatch
 ):
     """The relay sometimes refuses a poll with 409. While it keeps pushing, that is not an outage."""
-    from custom_components.dwarf3 import coordinator as coordinator_module
+    from custom_components.dwarf import coordinator as coordinator_module
 
     mock_relay(aioclient_mock)
     entry = await setup(hass)

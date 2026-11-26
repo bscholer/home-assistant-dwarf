@@ -82,6 +82,6 @@ body:
     attributes:
       label: Logs
       description: |
-        Settings → System → Logs, filtered by "dwarf3". For the relay app, open the app's **Log** tab. For the card, the
-        browser console (F12) errors that mention dwarf3. Turn on debug logging if you can.
+        Settings → System → Logs, filtered by "dwarf". For the relay app, open the app's **Log** tab. For the card, the
+        browser console (F12) errors that mention dwarf. Turn on debug logging if you can.
       render: text

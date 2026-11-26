@@ -31,7 +31,7 @@ newer.
 
 After the restart, press this button to start the setup.
 
-[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=dwarf3)
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=dwarf)
 
 Or go to **Settings → Devices & services**. If your scope is on, it may already be listed as **Discovered**. If it isn't, choose
 **Add integration** and search for **DWARF**.
@@ -87,12 +87,12 @@ It has the live view with a joystick, a shutter button with capture settings, go
 your sky, a gallery of the stacks on the SD card, and the device controls. Most of it needs **Full control**.
 
 ```yaml
-type: custom:dwarf3-card
+type: custom:dwarf-card
 device_id: <optional, the first DWARF 3 is used when left out>
 theme: auto  # or light, dark. auto follows Home Assistant
 ```
 
-The integration keeps a copy of the card in `config/www/dwarf3` and adds it to your dashboard resources, so it loads even
+The integration keeps a copy of the card in `config/www/dwarf` and adds it to your dashboard resources, so it loads even
 while Home Assistant is still starting. It removes both when you delete the last DWARF 3. After an update, reload the page if the
 card looks old. The card uses the Barlow font (SIL Open Font License, in `frontend/fonts`).
 
@@ -136,23 +136,35 @@ your Wi-Fi.
   ```
 - **Media browser:** every session on the scope that has a stack is listed under **Media → DWARF 3**, newest first, with a
   thumbnail and a title like "M 81, 30 s, 2026-11-18 03:11" (the time is the scope's own clock). Play one on any display from there,
-  or in an automation with `media-source://dwarf3/<entry id>/<session folder name>`. It works in read-only mode too.
+  or in an automation with `media-source://dwarf/<entry id>/<session folder name>`. It works in read-only mode too.
 - **Pitch and rotation** sensors, in degrees, like a PTZ camera's pan and tilt position. They are the scope's motor angles,
   not altitude and azimuth, because the mount is tilted. On a DWARF 3, pitch 172.5 is straight up and 0 is the closed barrel.
 - **Nudge** buttons (right, up, left, down) turn the scope about 9 degrees, and **Point straight up** sets the pitch to 172.5 (DWARF 3 only for now; the angle isn't known for the other models).
   Close barrel is the park position. There are no pitch or rotation sliders, on purpose: they would be too easy to hit by
-  accident. For an exact position use `dwarf3.point`.
+  accident. For an exact position use `dwarf.point`.
 
 ## Actions (full control)
 
 All take a DWARF 3 device as the target.
 
-- `dwarf3.goto`: `name`, `ra_hours`, `dec_degrees` (J2000). The relay refuses a target within 30 degrees of the Sun.
-- `dwarf3.start_capture`: `frames`, `exposure` (seconds; 15, 30 or 60 on a DWARF 3, and the scope's own list with relay 0.6 or newer), `gain`, `filter` (vis, astro, duo on a DWARF 3; astro, duo on a mini; vis and astro, meaning IR cut and IR pass, on a DWARF II). The scope's online sensor lists the connected model's choices.
-- `dwarf3.start_dark`: `frames`, `exposure`, `wide`. Close the barrel first.
-- `dwarf3.move`: `angle`, `length` (0 to 1), `seconds` (up to 5).
-- `dwarf3.point`: `pitch` (0 to 175; 172.5 is straight up on a DWARF 3) and optional `rotation`.
-- `dwarf3.delete_session`: `session`. Cannot be undone, and is refused while a capture runs.
+- `dwarf.goto`: `name`, `ra_hours`, `dec_degrees` (J2000). The relay refuses a target within 30 degrees of the Sun.
+- `dwarf.start_capture`: `frames`, `exposure` (seconds; 15, 30 or 60 on a DWARF 3, and the scope's own list with relay 0.6 or newer), `gain`, `filter` (vis, astro, duo on a DWARF 3; astro, duo on a mini; vis and astro, meaning IR cut and IR pass, on a DWARF II). The scope's online sensor lists the connected model's choices.
+- `dwarf.start_dark`: `frames`, `exposure`, `wide`. Close the barrel first.
+- `dwarf.move`: `angle`, `length` (0 to 1), `seconds` (up to 5).
+- `dwarf.point`: `pitch` (0 to 175; 172.5 is straight up on a DWARF 3) and optional `rotation`.
+- `dwarf.delete_session`: `session`. Cannot be undone, and is refused while a capture runs.
+
+## Upgrading from 0.8 or older
+
+In 0.9 I renamed the integration's internal name from `dwarf3` to `dwarf`, so it matches the other DWARF models and the
+repository. Home Assistant treats that as a new integration, so you need to set it up again once:
+
+1. Remove the old **DWARF** integration under **Settings → Devices & services**, so its entities are cleaned up.
+2. Update to 0.9 in the marketplace and restart Home Assistant. If a `custom_components/dwarf3` folder is still there, delete it.
+3. Add the integration again. If you used full control, the relay app you already installed is found and kept.
+
+Entity IDs should come out the same, since they come from the device name. Two things you may have used do change: actions are now `dwarf.goto`, `dwarf.start_capture` and so on
+instead of `dwarf3.goto`, and the card type is `custom:dwarf-card` instead of `custom:dwarf3-card`.
 
 ## Notes
 
@@ -167,7 +179,7 @@ All take a DWARF 3 device as the target.
   forwards port 554 (so the relay needs the host network, as the app does). In read-only mode it comes straight from the scope, and
   only plays while the DWARFLAB app has the camera running, since nothing here can Prepare. The scope only streams after **Prepare**.
   The tele stream waits for a keyframe, so it can take up to about 40 s to start.
-- The brand images in `custom_components/dwarf3/brand/` belong to DWARFLAB, and this project is not affiliated with them.
+- The brand images in `custom_components/dwarf/brand/` belong to DWARFLAB, and this project is not affiliated with them.
   The MIT license covers the code.
 
 MIT, see `LICENSE`.
